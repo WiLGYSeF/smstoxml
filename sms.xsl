@@ -216,6 +216,8 @@
 
 					row.cells[Cols.NUMBER].textContent = row.cells[Cols.NUMBER].textContent.replace(/~/g, "\n");
 
+					//highlight (bold) mms sender
+
 					var mms_sender = row.cells[Cols.MESSAGE].getElementsByClassName("mms-sender")[0];
 					if(mms_sender !== undefined)
 					{
@@ -382,12 +384,7 @@
 							break;
 						}
 
-						if(str.includes("Grimer"))
-						{
-							console.log(str);
-							console.log(str.substring(idx + 12));
-						}
-
+						//look for second surrogate
 						if(str.substring(idx + 12).search(re) != 0)
 						{
 							msg += str.substring(0, 12);
