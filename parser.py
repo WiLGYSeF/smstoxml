@@ -73,6 +73,8 @@ class Parser:
 
 			for node in self.soup.find_all(["sms", "mms"]):
 				if not skipMMS and "~" in node["address"]:
+					#checks each number in mms
+
 					spl = node["contact_name"].split(", ")
 					i = 0
 
@@ -189,8 +191,12 @@ class Parser:
 			"video/x-sgi-movie": "movie",
 		}
 
-		#tf = tarfile.open(arname, "w:gz")
-		zf = zipfile.ZipFile(arname, "w")
+		if arname.endswith(".tgz") or arname.endswith(".tar.gz"):
+			ar = tarfile.open(arname, "w:gz")
+			atype = "tgz"
+		else:
+			ar = zipfile.ZipFile(arname, "w")
+			atype = "zip"
 		usednames = set()
 
 		for node in self.soup.find_all("part"):
@@ -232,14 +238,16 @@ class Parser:
 
 			data = base64.b64decode(node.attrs["data"])
 			sio = io.BytesIO(data)
-			#tarinfo = tarfile.TarInfo(name=str(name))
-			#tarinfo.size = len(data)
-			#tf.addfile(tarinfo, sio)
-			zf.writestr(name, sio.getvalue())
+
+			if atype == "tgz":
+				tarinfo = tarfile.TarInfo(name=str(name))
+				tarinfo.size = len(data)
+				ar.addfile(tarinfo, sio)
+			else:
+				ar.writestr(name, sio.getvalue())
 			usednames.add(name)
 
-		#tf.close()
-		zf.close()
+		ar.close()
 
 	def optimizeImages(self, ctfilter, numfilter, maxWidth, maxHeight, jpgQuality):
 		if not self.smsXML:
