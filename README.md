@@ -2,7 +2,7 @@
 A tool to manipulate SMS and call backup XML files created by the app *SMS Backup & Restore*.
 Allows you to backup emojis from messages and converts it to valid XML for viewing in browsers.
 
-To view messages in a browser, make sure the `sms.xml` file is in the same directory as the SMS backup.
+To view messages in a browser, make sure the `sms.xsl` file is in the same directory as the SMS backup `sms.xml`.
 
 ## Converting Exported XML Backup
 Convert the emojis into valid XML, which can then be viewed on a browser:
@@ -25,21 +25,21 @@ python3 smstoxml.py sms.xml --list
 ## Replacing/Normalizing Contact Numbers
 Sometimes, the backup will contain different styles of numbers for the messages.
 
-The number `+1-555-123-4567` may be found in the file in these formats for `John Doe`:
-- +15551234567
-- 15551234567
-- 5551234567
-- (555)1234567
+The number `+1-123-555-0123` may be found in the file in these formats for `John Doe`:
+- +11235550123
+- 11235550123
+- 1235550123
+- (123)5550123
 
 To normalize them for easier parsing, viewing, filtering, etc.:
 ```bash
-python3 smstoxml.py sms.xml sms-converted.xml --replace-number "John Doe" "+15551234567"
+python3 smstoxml.py sms.xml sms-converted.xml --replace-number "John Doe" "+11235550123"
 ```
 
 ## Removing Messages
 To delete messages from certain contacts:
 ```bash
-python3 smstoxml.py sms.xml sms-converted.xml --filter-contact "John Doe" --filter-contact "Jane Doe" --filter-number "555123456" --remove-filtered
+python3 smstoxml.py sms.xml sms-converted.xml --filter-contact "John Doe" --filter-contact "Jane Doe" --filter-number "+11235550123" --remove-filtered
 ```
 
 ## Removing Calls (calls.xml)
