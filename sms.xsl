@@ -157,7 +157,7 @@
 
 		<script>
 		<![CDATA[
-			"use strict;"
+			"use strict";
 
 			var Cols = {
 				TYPE: 0,
@@ -176,6 +176,7 @@
 				rows.splice(0, 1);
 
 				rows.sort(function(a, b){
+					//sort by hidden date value
 					a = parseInt(a.children[4].innerHTML, 10);
 					b = parseInt(b.children[4].innerHTML, 10);
 
@@ -188,6 +189,7 @@
 
 				var tbody = tbl.getElementsByTagName("tbody")[0];
 
+				//remove all but header, and create rows back as sorted
 				while(tbody.children.length > 1)
 					tbody.removeChild(tbody.children[1]);
 				for (var i = 0; i < rows.length; i++)
@@ -199,6 +201,7 @@
 
 					var status = row.cells[Cols.TYPE].textContent.trim();
 
+					//color by status
 					switch(status)
 					{
 						case "Received":
@@ -214,9 +217,8 @@
 
 					row.cells[Cols.TYPE].textContent = status;
 
+					//format multiple numbers by newlines
 					row.cells[Cols.NUMBER].textContent = row.cells[Cols.NUMBER].textContent.replace(/~/g, "\n");
-
-					//highlight (bold) mms sender
 
 					var mms_sender = row.cells[Cols.MESSAGE].getElementsByClassName("mms-sender")[0];
 					if(mms_sender !== undefined)
@@ -224,6 +226,8 @@
 						var numspl = row.cells[Cols.NUMBER].textContent.split("\n");
 						if(numspl.length > 1)
 						{
+							//if it's a group text, put the sender in bold
+
 							var ctspl = row.cells[Cols.CONTACT].textContent.split(", ");
 							var changed = false;
 
@@ -283,26 +287,26 @@
 
 			function populateConversations(conv, contacts)
 			{
-				var oldcontact = conv.selectedIndex >= 1 ? contacts[conv.selectedIndex - 1][1] : undefined;
+				//store last selected
+				var oldcontact = conv.selectedIndex > 0 ? contacts[conv.selectedIndex - 1][1] : undefined;
+				var oldconvstr = conv.options[conv.selectedIndex].value;
+
+				var selected = 0;
+				var curidx = 1;
 
 				while(conv.options.length > 1)
 					conv.removeChild(conv.options[1]);
 
-				conv.selectedIndex = 0;
-
 				var added = new Set();
-				var option;
-				var str;
 
 				for (var i = 0; i < contacts.length; i++)
 				{
-					option = document.createElement("option");
+					var option = document.createElement("option");
+					var str;
 
-					if(useMerged)
+					if(useMerged && contacts[i][1] != "(Unknown)")
 					{
 						str = contacts[i][1];
-						if(str == "(Unknown)")
-							str += " - " + contacts[i][0];
 					}else
 					{
 						str = contacts[i][1] + " - " + contacts[i][0];
@@ -317,24 +321,36 @@
 
 					conv.add(option);
 
-					if(useMerged && contacts[i][1] == oldcontact)
-						conv.selectedIndex = i + 1;
+					//restore last selected
+					if(useMerged && (contacts[i][1] != "(Unknown)" && contacts[i][1] == oldcontact || str == oldconvstr))
+					{
+						selected = curidx;
+					}
+
+					//only increment if not in added set
+					curidx++;
 				}
+
+				conv.selectedIndex = selected;
 			}
 
 			function filterTable(tbl, conv, contacts)
 			{
+				var selectedNum = undefined;
+				var selectedContact = undefined;
 				var idx = conv.selectedIndex;
-				var selnum = undefined;
-				var selct = undefined;
 
 				if(idx > 0)
 				{
-					idx--;
-
-					selct = contacts[idx][1];
-					if(!useMerged || selct == "(Unknown)")
-						selnum = contacts[idx][0];
+					var convstr = conv.options[idx].value;
+					if(!useMerged || convstr.startsWith("(Unknown) "))
+					{
+						var spl = convstr.split(" - ");
+						selectedNum = spl[spl.length - 1];
+					}else
+					{
+						selectedContact = convstr;
+					}
 				}
 
 				var total = 0;
@@ -345,7 +361,7 @@
 					var num = row.cells[Cols.NUMBER].textContent;
 					var ct = row.cells[Cols.CONTACT].textContent;
 
-					if((selnum === undefined || num == selnum) && (selct === undefined || ct == selct))
+					if((selectedNum == undefined || num == selectedNum) && (selectedContact == undefined || ct == selectedContact))
 					{
 						row.style.display = "";
 						total++;
@@ -363,12 +379,7 @@
 				//high surrogate: 0xd800 - 0xdbff
 				//low surrogate: 0xdc00 - 0xdfff
 				var re = new RegExp(/&amp;#5(?:5(?:29[6-9]|[3-9]\d\d)|6\d\d\d|7[0-2]\d\d|73[0-3]\d|734[0-3]);/);
-			/*
-				var unicodeToEmoji = {
-					"\u263a": "&amp;#55357;&amp;#56898;", //smiling face
 
-				};
-			*/
 				for (var i = 1, len = tbl.rows.length; i < len; i++)
 				{
 					var row = tbl.rows[i];
@@ -392,8 +403,10 @@
 							continue;
 						}
 
-						var highsurr = parseInt(str.substring(idx + 6, idx + 6 + 5), 10);
-						var lowsurr = parseInt(str.substring(idx + 6 + 5 + 7, idx + 6 + 5 + 7 + 5), 10);
+						var idxoff = idx + 6;
+						var highsurr = parseInt(str.substring(idxoff, idxoff + 5), 10);
+						idxoff += 5 + 7;
+						var lowsurr = parseInt(str.substring(idxoff, idxoff + 5), 10);
 
 						if(!isNaN(highsurr) && !isNaN(lowsurr))
 						{
@@ -418,10 +431,9 @@
 			var contacts = getContacts(smses);
 
 			populateConversations(conv, contacts);
+			document.getElementById("textsshown").innerHTML = smses.rows.length - 1;
 
 			unescapeSurrogates(smses);
-
-			document.getElementById("textsshown").innerHTML = smses.rows.length - 1;
 
 			document.getElementById("merge").addEventListener("click", function(e){
 				e.target.disabled = true;
