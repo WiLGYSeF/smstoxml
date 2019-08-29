@@ -229,7 +229,11 @@
 							//if it's a group text, put the sender in bold
 
 							var ctspl = row.cells[Cols.CONTACT].textContent.split(", ");
-							var changed = false;
+							var changed = ctspl.length < numspl.length;
+
+							//if numspl and ctspl lengths are not equal, then at least one number is not a contact, it's probably in order
+							while(ctspl.length < numspl.length)
+								ctspl[ctspl.length] = "(Unknown)";
 
 							for (var n = 0; n < numspl.length; n++)
 							{
@@ -239,8 +243,7 @@
 								if(num == sender || (num.length >= 10 && num.substring(num.length - 10) == sender.substring(sender.length - 10)))
 								{
 									numspl[n] = '<b>' + numspl[n] + '</b>';
-									if(ctspl.length == numspl.length)
-										ctspl[n] = '<b>' + ctspl[n] + '</b>';
+									ctspl[n] = '<b>' + ctspl[n] + '</b>';
 									changed = true;
 									break;
 								}
