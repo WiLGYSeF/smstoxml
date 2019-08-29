@@ -14,6 +14,7 @@ def main(argv):
 	filterNumbers = set()
 	replaceNumbers = {}
 
+	listStats = False
 	removeFiltered = False
 	keepFiltered = False
 	removeNoDuration = False
@@ -54,6 +55,8 @@ def main(argv):
 			if arg == "-h" or arg == "--help":
 				printHelp()
 				exit(0)
+			elif arg == "--statistics":
+				listStats = True
 			elif arg == "-l" or arg == "--list":
 				listContacts = True
 			elif arg == "-f" or arg == "--filter-contact":
@@ -136,7 +139,11 @@ def main(argv):
 				if infname is None:
 					infname = arg
 				else:
-					outfname = arg
+					if outfname is None:
+						outfname = arg
+					else:
+						print("Error: too many filenames", file=sys.stderr)
+						exit(1)
 			i += 1
 
 	if infname is None:
@@ -222,14 +229,60 @@ def main(argv):
 			else:
 				ndiff = numbersSet - filterNumbers
 
-			print(cdiff)
-			print(ndiff)
-
 			parserObj.removeByFilter(cdiff, ndiff)
+
+	if listStats:
+		#refresh list
+		contactsList = parserObj.getContacts()
+
+		ctcount, numcount, mmscount = parserObj.countByFilter(filterContacts, filterNumbers)
+		totalCount = 0
+
+		for ct in ctcount:
+			totalCount += ctcount[ct]
+		for num in numcount:
+			if contactsList[num] in ctcount:
+				continue
+
+			totalCount += numcount[num]
+
+		print(infname + ":")
+		print("Total Count: " + str(totalCount))
+		print("")
+
+		for num in numcount:
+			print(num + "," + contactsList[num] + ": " + str(numcount[num]))
+
+		for ct in ctcount:
+			num = None
+			for n in contactsList:
+				if contactsList[n] == ct:
+					num = n
+					break
+			if num in numcount:
+				continue
+
+			print(num + "," + ct + ": " + str(ctcount[ct]))
+
+		totalMmsCount = 0
+		for mms in mmscount:
+			totalMmsCount += mmscount[mms]
+
+		if totalMmsCount > 0:
+			print("")
+			print("MMS Total Count: " + str(totalMmsCount))
+
+			for mms in mmscount:
+				print(mms + "," + contactsList[mms] + ": " + str(mmscount[mms]))
+
+
+		print("")
+		exit(0)
 
 	if listContacts:
 		#refresh list
 		contactsList = parserObj.getContacts()
+
 		sys.stdout.buffer.write("\n".join(list(map(lambda x: x + "," + contactsList[x], contactsList))).encode("utf-8"))
 		print("")
 		exit(0)
@@ -272,6 +325,7 @@ def printHelp():
 		"Usage: smstoxml.py [input] [output] options...\n"
 		"\n"
 		"  -h, --help                          shows this help menu\n"
+		"  --statistics                        display statistics of sms/calls\n"
 		"  -l, --list                          list the contacts in the file and exit\n"
 		"  -f, --filter-contact [name]         use this contact filter for other options\n"
 		"  -g, --filter-number [number]        use this number filter for other options\n"

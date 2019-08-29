@@ -48,6 +48,45 @@ class Parser:
 
 		return contacts
 
+	def countByFilter(self, ctfilter, numfilter):
+		ctcount = {}
+		numcount = {}
+		mmscount = {}
+		filtersFilled = len(ctfilter) + len(numfilter) != 0
+
+		if self.smsXML:
+			for node in self.soup.find_all(["sms", "mms"]):
+				if not filtersFilled or node["contact_name"] in ctfilter or node["address"] in numfilter:
+					if node["contact_name"] in ctcount:
+						ctcount[node["contact_name"]] += 1
+					else:
+						ctcount[node["contact_name"]] = 1
+
+					if node["address"] in numcount:
+						numcount[node["address"]] += 1
+					else:
+						numcount[node["address"]] = 1
+
+					if node.name == "mms":
+						if node["address"] in mmscount:
+							mmscount[node["address"]] += 1
+						else:
+							mmscount[node["address"]] = 1
+		else:
+			for call in self.soup.find_all("call"):
+				if not filtersFilled or call["contact_name"] in ctfilter or call["number"] in numfilter:
+					if call["contact_name"] in ctcount:
+						ctcount[call["contact_name"]] += 1
+					else:
+						ctcount[call["contact_name"]] = 1
+
+					if call["number"] in numcount:
+						numcount[call["number"]] += 1
+					else:
+						numcount[call["number"]] = 1
+
+		return (ctcount, numcount, mmscount)
+
 	def removeByFilter(self, ctfilter, numfilter):
 		removed = False
 
