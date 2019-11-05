@@ -1,9 +1,9 @@
 #requires python3-bs4, python3-pil, python3-lxml
 
+import filters
 import parser
 from parser import Parser
 
-import bisect
 import re
 import sys
 import time
@@ -13,9 +13,10 @@ def main(argv):
 	outfname = None
 
 	#filters
-	filterContacts = set()
-	filterNumbers = set()
-	filterTimes = []
+	contactFilterList = set()
+	numberFilterList = set()
+
+	timeFilter = filters.TimelineFilter()
 
 	replaceNumbers = {}
 
@@ -33,6 +34,7 @@ def main(argv):
 	indentation = 1
 
 	#image optimization options
+	optimizeImages = False
 	imageWidth = -1
 	imageHeight = -1
 	jpgQuality = -1
@@ -71,14 +73,14 @@ def main(argv):
 					printHelp()
 					exit(1)
 
-				filterContacts.add(argv[i + 1])
+				contactFilterList.add(argv[i + 1])
 				i += 1
 			elif arg == "-g" or arg == "--filter-number":
 				if i == len(argv) - 1:
 					printHelp()
 					exit(1)
 
-				filterNumbers.add(argv[i + 1])
+				numberFilterList.add(argv[i + 1])
 				i += 1
 			elif arg == "-t" or arg == "--filter-time":
 				if i == len(argv) - 2:
@@ -86,40 +88,11 @@ def main(argv):
 					exit(1)
 
 				try:
-					startTime = int(argv[i + 1])
-				except:
-					try:
-						startTime = int(time.mktime(time.strptime(argv[i + 1], "%Y-%m-%d %H:%M:%S")))
-					except:
-						print("Error: invalid start time: " + argv[i + 1], file=sys.stderr)
-						exit(1)
-				try:
-					endTime = int(argv[i + 2])
-				except:
-					try:
-						endTime = int(time.mktime(time.strptime(argv[i + 2], "%Y-%m-%d %H:%M:%S")))
-					except:
-						print("Error: invalid start time: " + argv[i + 1], file=sys.stderr)
-						exit(1)
-
-				if startTime > endTime:
-					print("Error: filter time " + str(startTime) + " and " + str(endTime) + " is in wrong order", file=sys.stderr)
+					timeFilter.addTimeRange(argv[i + 1], argv[i + 2])
+				except Exception as e:
+					print("Error: " + str(e), file=sys.stderr)
 					exit(1)
 
-				def cmpfunc(x, y):
-					if x[0] < y[0]:
-						return -1
-					if x[0] > y[0]:
-						return 1
-
-					if x[1] > y[1]:
-						return -1
-					if x[1] < y[1]:
-						return 1
-					return 0
-
-				insertarr(filterTimes, ( startTime, 0 ), cmpfunc, unique=True)
-				insertarr(filterTimes, ( endTime, 1 ), cmpfunc, unique=True)
 				i += 2
 			elif arg == "--replace-number":
 				if i == len(argv) - 2:
@@ -173,6 +146,8 @@ def main(argv):
 				except:
 					print("Error: invalid image width", file=sys.stderr)
 					exit(1)
+
+				optimizeImages = True
 				i += 1
 			elif arg == "--image-height":
 				if i == len(argv) - 1:
@@ -184,6 +159,8 @@ def main(argv):
 				except:
 					print("Error: invalid image height", file=sys.stderr)
 					exit(1)
+
+				optimizeImages = True
 				i += 1
 			elif arg == "--jpg-quality":
 				if i == len(argv) - 1:
@@ -195,6 +172,8 @@ def main(argv):
 				except:
 					print("Error: invalid jpg quality")
 					exit(1)
+
+				optimizeImages = True
 				i += 1
 			elif arg == "--shrink-only":
 				shrinkOnly = True
@@ -239,117 +218,52 @@ def main(argv):
 		exit(1)
 
 	contactsList = parserObj.getContacts()
-	numbersSet = set(contactsList)
-	contactsSet = set(list(map(lambda x: contactsList[x], contactsList)))
 
-	if len(filterContacts) != 0:
-		noexist = filterContacts - contactsSet
+	clFilter = filters.ContactListFilter(contactsList)
 
-		if len(noexist) != 0:
-			for v in noexist:
-				print(v + ": not found", file=sys.stderr)
-			filterContacts = filterContacts - noexist
+	for num in numberFilterList:
+		try:
+			clFilter.addNumber(num)
+		except Exception as e:
+			print(e, file=sys.stderr)
 
-	if len(filterNumbers) != 0:
-		noexist = filterNumbers - set(contactsList)
+	for ct in contactFilterList:
+		try:
+			clFilter.addContact(ct)
+		except Exception as e:
+			print(e, file=sys.stderr)
 
-		if len(noexist) != 0:
-			for v in noexist:
-				print(v + ": not found", file=sys.stderr)
-			filterNumbers = filterNumbers - noexist
+	timeFilter.condense()
 
-	if len(filterTimes) != 0:
-		condensedtime = []
-		length = len(filterTimes)
-
-		#condense and simplify timeline
-
-		i = 0
-		while i < length:
-			startTime = filterTimes[i][0]
-			i += 1
-
-			while True:
-				changed = False
-
-				while i < length and filterTimes[i][1] == 0:
-					changed = True
-					i += 1
-
-				while i < length - 1 and filterTimes[i + 1][1] == 1:
-					changed = True
-					i += 1
-
-				while i < length - 1 and filterTimes[i][0] == filterTimes[i + 1][0]:
-					changed = True
-					i += 1
-
-				if not changed or i == length:
-					break
-
-			if i == length:
-				i -= 1
-
-			endTime = filterTimes[i][0]
-
-			condensedtime.append( (startTime, endTime) )
-			i += 1
-
-		filterTimes = condensedtime
+	if len(clFilter) != 0 or len(timeFilter) != 0:
+		if not removeNoDuration and len(replaceNumbers) == 0 and not removeFiltered and not keepFiltered and not listStats and not optimizeImages and extractfname is None:
+			print("Warn: filters were defined, but not used", file=sys.stderr)
 
 	if removeNoDuration:
 		try:
-			parserObj.removeNoDuration(filterContacts, filterNumbers, filterTimes)
+			parserObj.removeNoDuration(clFilter, timeFilter)
 		except Exception as e:
 			print("Error: " + str(e), file=sys.stderr)
 
 	if len(replaceNumbers) != 0:
 		for contact in replaceNumbers:
-			parserObj.replaceNumber(contact, replaceNumbers[contact], filterTimes)
+			parserObj.replaceNumber(contact, replaceNumbers[contact], timeFilter)
 
-	if len(filterContacts) != 0 or len(filterNumbers) != 0 or len(filterTimes) != 0:
+	if len(clFilter) != 0 or len(timeFilter) != 0:
 		if removeFiltered:
-			parserObj.removeByFilter(filterContacts, filterNumbers, filterTimes)
+			parserObj.removeByFilter(clFilter, timeFilter)
 		elif keepFiltered:
 			#get the inverse of the filters set
+			invertedClFilter = clFilter.invert()
+			invertedTimeFilter = timeFilter.invert()
 
-			cdiff = set()
-			ndiff = set()
-			invertTime = parserObj.invertTimeFilter(filterTimes)
-
-			if len(filterContacts) != 0 and len(filterNumbers) != 0:
-				cdiff = contactsSet - filterContacts
-				ndiff = numbersSet - filterNumbers
-
-				#make sure the two sets don't contradict
-
-				for c in filterContacts:
-					for key, val in contactsList.items():
-						if val == c and key in ndiff:
-							ndiff.remove(key)
-
-				for n in filterNumbers:
-					if contactsList[n] in cdiff:
-						cdiff.remove(contactsList[n])
-
-				if "(Unknown)" in cdiff:
-					cdiff.remove("(Unknown)")
-
-					for key, val in contactsList.items():
-						if val == "(Unknown)" and key not in filterNumbers:
-							ndiff.add(key)
-			elif len(filterContacts) != 0:
-				cdiff = contactsSet - filterContacts
-			elif len(filterNumbers) != 0:
-				ndiff = numbersSet - filterNumbers
-
-			parserObj.removeByFilter(cdiff, ndiff, invertTime)
+			parserObj.removeByFilter(invertedClFilter, invertedTimeFilter)
 
 	if listStats:
 		#get contact list after filters
 		contactsList = parserObj.getContacts()
 
-		ctcount, numcount, mmscount = parserObj.countByFilter(filterContacts, filterNumbers, filterTimes)
+		ctcount, numcount, mmscount = parserObj.countByFilter(clFilter, timeFilter)
 		totalCount = 0
 
 		for ct in ctcount:
@@ -363,10 +277,14 @@ def main(argv):
 			totalCount += numcount[num][1]
 
 		print(infname + ":")
-		print("SMS Total Count: " + str(totalCount))
+		print("Total Count: " + str(totalCount))
 		print("")
 
-		print("Number, Contact, Sent To, Received From")
+		if parserObj.smsXML:
+			print("Number, Contact, Sent, Received")
+		else:
+			print("Number, Contact, Outgoing, Incoming")
+
 		for num in numcount:
 			if len(num) == 0:
 				continue
@@ -389,7 +307,11 @@ def main(argv):
 
 		if hasCts:
 			print("")
-			print("Number, Contact, Sent To, Received From")
+			if parserObj.smsXML:
+				print("Number, Contact, Sent, Received")
+			else:
+				print("Number, Contact, Outgoing, Incoming")
+
 			for ct in ctcount:
 				num = None
 				for n in contactsList:
@@ -424,13 +346,16 @@ def main(argv):
 		#get contact list after filters
 		contactsList = parserObj.getContacts()
 
-		sys.stdout.buffer.write("\n".join(list(map(lambda x: x + "," + contactsList[x], contactsList))).encode("utf-8"))
-		print("")
+		contacts = list(map(lambda x: x + "," + contactsList[x], contactsList))
+		if len(contacts) != 0:
+			sys.stdout.buffer.write("\n".join(contacts).encode("utf-8"))
+			print("")
+
 		exit(0)
 
-	if imageWidth != -1 or imageHeight != -1 or jpgQuality != -1:
+	if optimizeImages:
 		try:
-			parserObj.optimizeImages(filterContacts, filterNumbers, filterTimes, imageWidth, imageHeight, jpgQuality, shrinkOnly)
+			parserObj.optimizeImages(clFilter, timeFilter, imageWidth, imageHeight, jpgQuality, shrinkOnly)
 		except Exception as e:
 			print("Error: " + str(e), file=sys.stderr)
 	else:
@@ -442,7 +367,7 @@ def main(argv):
 
 	if extractfname is not None:
 		try:
-			parserObj.extractMedia(extractfname, set(), filterContacts, filterNumbers, filterTimes)
+			parserObj.extractMedia(extractfname, set(), clFilter, timeFilter)
 		except Exception as e:
 			print("Error: " + str(e), file=sys.stderr)
 		exit(0)
@@ -478,27 +403,6 @@ def main(argv):
 		sys.stdout.buffer.write(output.encode("utf-8"))
 		print("")
 
-def insertarr(arr, value, cmpfunc, unique=False):
-	length = len(arr)
-	low = 0
-	high = length
-
-	#insert into sorted array
-
-	while low < high:
-		mid = (low + high) // 2
-		cval = cmpfunc(arr[mid], value)
-		if cval < 0:
-			low = mid + 1
-		elif cval > 0:
-			high = mid
-		else:
-			low = mid + 1
-			break
-
-	if not unique or low >= length or arr[low] != value:
-		arr.insert(low, value)
-
 def printHelp():
 	print(
 		"SMSBackupXML to valid XML converter\n"
@@ -510,22 +414,22 @@ def printHelp():
 		"  -f, --filter-contact [name]         use contact as filter for other options\n"
 		"  -g, --filter-number [number]        use number as filter for other options\n"
 		"  -t, --filter-time [time] [time]     use time range as filter for other options\n"
-		"                                        times can be in seconds since epoch, or\n"
-		"                                        YYYY-MM-DD HH:MM:SS\n"
-		"  --replace-number [contact] [num]    replace with new number for contact\n"
+		"                                        times can be in seconds since epoch, -\n"
+		"                                        or YYYY-MM-DD HH:MM:SS\n"
+		"  --replace-number [contact] [num]    replace with new number for contact -\n"
 		"                                        references for grouping purposes\n"
 		"  --remove-filtered                   remove sms/calls in the filter\n"
 		"  --keep-filtered                     remove sms/calls NOT in the filter\n"
 		"  --remove-no-duration                remove zero duration calls for call.xml\n"
+		"                                        anything filtered will not be removed\n"
 		"  --remove-comments                   remove comments from the output xml file\n"
 		"\n"
 		"  -r, --revert                        convert valid XML back to SMSBackupXML\n"
 		"  --no-convert                        do not convert XML, default is convert\n"
 		"\n"
-		"  -s, --strip                         strip unnecessary attributes from nodes,\n"
+		"  -s, --strip                         strip unnecessary attributes from nodes\n"
 		"                                        MAY MAKE FILE UNRESTORABLE!\n"
-		"  --indent [value]                    number of spaces for indentation,\n"
-		"                                        or 'tab'\n"
+		"  --indent [value]                    number of spaces for indentation, or 'tab'\n"
 		"\n"
 		"  -e, --extract-media [file]          extract media to zip file and exit\n"
 		"  --image-width [value]               set maximum image width\n"
