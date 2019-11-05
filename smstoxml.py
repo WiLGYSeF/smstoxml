@@ -316,20 +316,28 @@ def main(argv):
 		totalCount = 0
 
 		for ct in ctcount:
-			totalCount += ctcount[ct]
+			totalCount += ctcount[ct][0]
+			totalCount += ctcount[ct][1]
 		for num in numcount:
-			if contactsList[num] in ctcount:
+			if len(num) != 0 and contactsList[num] in ctcount:
 				continue
 
-			totalCount += numcount[num]
+			totalCount += numcount[num][0]
+			totalCount += numcount[num][1]
 
 		print(infname + ":")
-		print("Total Count: " + str(totalCount))
+		print("SMS Total Count: " + str(totalCount))
 		print("")
 
+		print("Number, Contact, Sent To, Received From")
 		for num in numcount:
-			print(num + "," + contactsList[num] + ": " + str(numcount[num]))
+			if len(num) == 0:
+				continue
 
+			print(num + ', "' + contactsList[num] + '", ' + str(numcount[num][0]) + ', ' + str(numcount[num][1]))
+
+		#check if there are any contacts not in the numbers list for some reason
+		hasCts = False
 		for ct in ctcount:
 			num = None
 			for n in contactsList:
@@ -339,18 +347,38 @@ def main(argv):
 			if num in numcount:
 				continue
 
-			print(num + "," + ct + ": " + str(ctcount[ct]))
+			hasCts = True
+			break
+
+		if hasCts:
+			print("")
+			print("Number, Contact, Sent To, Received From")
+			for ct in ctcount:
+				num = None
+				for n in contactsList:
+					if contactsList[n] == ct:
+						num = n
+						break
+				if num in numcount:
+					continue
+
+				print(num + ', "' + ct + '", ' + str(ctcount[ct][0]) + ', ' + str(ctcount[ct][1]))
 
 		totalMmsCount = 0
 		for mms in mmscount:
-			totalMmsCount += mmscount[mms]
+			totalMmsCount += mmscount[mms][0]
+			totalMmsCount += mmscount[mms][1]
 
 		if totalMmsCount > 0:
 			print("")
 			print("MMS Total Count: " + str(totalMmsCount))
+			print("")
+			#print("Number, Contact, Sent To, Received From")
+			print("Number, Contact, Count")
 
 			for mms in mmscount:
-				print(mms + "," + contactsList[mms] + ": " + str(mmscount[mms]))
+				#print(mms + ', "' + contactsList[mms] + '", ' + str(mmscount[mms][0]) + ', ' + str(mmscount[mms][1]))
+				print(mms + ', "' + contactsList[mms] + '", ' + str(mmscount[mms][1]))
 
 
 		print("")

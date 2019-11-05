@@ -57,36 +57,60 @@ class Parser:
 				seconds = int(node["date"]) // 1000
 
 				if not filtersFilled or node["contact_name"] in ctfilter or node["address"] in numfilter or self.inTimeFilter(timefilter, seconds):
-					if node["contact_name"] in ctcount:
-						ctcount[node["contact_name"]] += 1
+					sent = False
+					if node.name == "mms":
+						"""
+						for addr in node.find_all("addr"):
+							if int(addr["type"]) == 137:
+								if addr["address"] != node["address"]:
+									sent = True
+						"""
+						sent = False
 					else:
-						ctcount[node["contact_name"]] = 1
+						sent = int(node["type"]) == 2
 
-					if node["address"] in numcount:
-						numcount[node["address"]] += 1
+					if node["contact_name"] not in ctcount:
+						ctcount[node["contact_name"]] = [0, 0]
+					if sent:
+						ctcount[node["contact_name"]][0] += 1
 					else:
-						numcount[node["address"]] = 1
+						ctcount[node["contact_name"]][1] += 1
+
+					if node["address"] not in numcount:
+						numcount[node["address"]] = [0, 0]
+					if sent:
+						numcount[node["address"]][0] += 1
+					else:
+						numcount[node["address"]][1] += 1
 
 					if node.name == "mms":
-						if node["address"] in mmscount:
-							mmscount[node["address"]] += 1
+						if node["address"] not in mmscount:
+							mmscount[node["address"]] = [0, 0]
+						if sent:
+							mmscount[node["address"]][0] += 1
 						else:
-							mmscount[node["address"]] = 1
+							mmscount[node["address"]][1] += 1
 		else:
 			for call in self.soup.find_all("call"):
 				#time is stored in milliseconds since epoch
 				seconds = int(call["date"]) // 1000
 
 				if not filtersFilled or call["contact_name"] in ctfilter or call["number"] in numfilter or self.inTimeFilter(timefilter, seconds):
-					if call["contact_name"] in ctcount:
-						ctcount[call["contact_name"]] += 1
-					else:
-						ctcount[call["contact_name"]] = 1
+					sent = int(call["type"]) == 2
 
-					if call["number"] in numcount:
-						numcount[call["number"]] += 1
+					if call["contact_name"] not in ctcount:
+						ctcount[call["contact_name"]] = [0, 0]
+					if sent:
+						ctcount[call["contact_name"]][0] += 1
 					else:
-						numcount[call["number"]] = 1
+						ctcount[call["contact_name"]][1] += 1
+
+					if call["number"] not in numcount:
+						numcount[call["number"]] = [0, 0]
+					if sent:
+						numcount[call["number"]][0] += 1
+					else:
+						numcount[call["number"]][1] += 1
 
 		return (ctcount, numcount, mmscount)
 
