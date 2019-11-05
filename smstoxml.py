@@ -3,8 +3,10 @@
 import parser
 from parser import Parser
 
+import bisect
 import re
 import sys
+import time
 
 def main(argv):
 	infname = None
@@ -12,6 +14,7 @@ def main(argv):
 
 	filterContacts = set()
 	filterNumbers = set()
+	filterTimes = []
 	replaceNumbers = {}
 
 	listStats = False
@@ -27,6 +30,7 @@ def main(argv):
 	imageWidth = -1
 	imageHeight = -1
 	jpgQuality = -1
+	shrinkOnly = False
 
 	removeComments = False
 	indentation = 1
@@ -73,6 +77,39 @@ def main(argv):
 
 				filterNumbers.add(argv[i + 1])
 				i += 1
+			elif arg == "-t" or arg == "--filter-time":
+				if i == len(argv) - 2:
+					printHelp()
+					exit(1)
+
+				try:
+					startTime = int(argv[i + 1])
+				except:
+					startTime = int(time.mktime(time.strptime(argv[i + 1], "%Y-%m-%d %H:%M:%S")))
+				try:
+					endTime = int(argv[i + 2])
+				except:
+					endTime = int(time.mktime(time.strptime(argv[i + 2], "%Y-%m-%d %H:%M:%S")))
+
+				if startTime > endTime:
+					print("Error: filter time " + str(startTime) + " and " + str(endTime) + " is in wrong order", file=sys.stderr)
+					exit(1)
+
+				def cmpfunc(x, y):
+					if x[0] < y[0]:
+						return -1
+					if x[0] > y[0]:
+						return 1
+
+					if x[1] > y[1]:
+						return -1
+					if x[1] < y[1]:
+						return 1
+					return 0
+
+				insertarr(filterTimes, ( startTime, 0 ), cmpfunc, unique=True)
+				insertarr(filterTimes, ( endTime, 1 ), cmpfunc, unique=True)
+				i += 2
 			elif arg == "--replace-number":
 				if i == len(argv) - 2:
 					printHelp()
@@ -132,6 +169,8 @@ def main(argv):
 
 				jpgQuality = int(argv[i + 1])
 				i += 1
+			elif arg == "--shrink-only":
+				shrinkOnly = True
 			elif arg[0] == "-":
 				print("Error: unknown argument " + arg, file=sys.stderr)
 				exit(1)
@@ -189,19 +228,57 @@ def main(argv):
 				print(v + ": not found", file=sys.stderr)
 			filterNumbers = filterNumbers - noexist
 
+	if len(filterTimes) != 0:
+		condensedtime = []
+		length = len(filterTimes)
+
+		i = 0
+		while i < length:
+			startTime = filterTimes[i][0]
+			i += 1
+
+			while True:
+				changed = False
+
+				while i < length and filterTimes[i][1] == 0:
+					changed = True
+					i += 1
+
+				while i < length - 1 and filterTimes[i + 1][1] == 1:
+					changed = True
+					i += 1
+
+				while i < length - 1 and filterTimes[i][0] == filterTimes[i + 1][0]:
+					changed = True
+					i += 1
+
+				if not changed or i == length:
+					break
+
+			if i == length:
+				i -= 1
+
+			endTime = filterTimes[i][0]
+
+			condensedtime.append( (startTime, endTime) )
+			i += 1
+
+		filterTimes = condensedtime
+
 	if removeNoDuration:
-		parserObj.removeNoDuration(filterContacts, filterNumbers)
+		parserObj.removeNoDuration(filterContacts, filterNumbers, filterTimes)
 
 	if len(replaceNumbers) != 0:
 		for contact in replaceNumbers:
-			parserObj.replaceNumber(contact, replaceNumbers[contact])
+			parserObj.replaceNumber(contact, replaceNumbers[contact], filterTimes)
 
-	if len(filterContacts) != 0 or len(filterNumbers) != 0:
+	if len(filterContacts) != 0 or len(filterNumbers) != 0 or len(filterTimes) != 0:
 		if removeFiltered:
-			parserObj.removeByFilter(filterContacts, filterNumbers)
+			parserObj.removeByFilter(filterContacts, filterNumbers, filterTimes)
 		elif keepFiltered:
 			cdiff = set()
 			ndiff = set()
+			invertTime = parserObj.invertTimeFilter(filterTimes)
 
 			if len(filterContacts) != 0 and len(filterNumbers) != 0:
 				cdiff = contactsSet - filterContacts
@@ -226,16 +303,16 @@ def main(argv):
 							ndiff.add(key)
 			elif len(filterContacts) != 0:
 				cdiff = contactsSet - filterContacts
-			else:
+			elif len(filterNumbers) != 0:
 				ndiff = numbersSet - filterNumbers
 
-			parserObj.removeByFilter(cdiff, ndiff)
+			parserObj.removeByFilter(cdiff, ndiff, invertTime)
 
 	if listStats:
 		#refresh list
 		contactsList = parserObj.getContacts()
 
-		ctcount, numcount, mmscount = parserObj.countByFilter(filterContacts, filterNumbers)
+		ctcount, numcount, mmscount = parserObj.countByFilter(filterContacts, filterNumbers, filterTimes)
 		totalCount = 0
 
 		for ct in ctcount:
@@ -288,10 +365,10 @@ def main(argv):
 		exit(0)
 
 	if imageWidth != -1 or imageHeight != -1 or jpgQuality != -1:
-		parserObj.optimizeImages(filterContacts, filterNumbers, imageWidth, imageHeight, jpgQuality)
+		parserObj.optimizeImages(filterContacts, filterNumbers, filterTimes, imageWidth, imageHeight, jpgQuality, shrinkOnly)
 
 	if extractfname is not None:
-		parserObj.extractMedia(extractfname, set(), filterContacts, filterNumbers)
+		parserObj.extractMedia(extractfname, set(), filterContacts, filterNumbers, filterTimes)
 		exit(0)
 
 	if stripAttr:
@@ -319,6 +396,25 @@ def main(argv):
 		sys.stdout.buffer.write(output.encode("utf-8"))
 		print("")
 
+def insertarr(arr, value, cmpfunc, unique=False):
+	length = len(arr)
+	low = 0
+	high = length
+
+	while low < high:
+		mid = (low + high) // 2
+		cval = cmpfunc(arr[mid], value)
+		if cval < 0:
+			low = mid + 1
+		elif cval > 0:
+			high = mid
+		else:
+			low = mid + 1
+			break
+
+	if not unique or low >= length or arr[low] != value:
+		arr.insert(low, value)
+
 def printHelp():
 	print(
 		"SMSBackupXML to valid XML converter\n"
@@ -327,8 +423,10 @@ def printHelp():
 		"  -h, --help                          shows this help menu\n"
 		"  --statistics                        display statistics of sms/calls\n"
 		"  -l, --list                          list the contacts in the file and exit\n"
-		"  -f, --filter-contact [name]         use this contact filter for other options\n"
-		"  -g, --filter-number [number]        use this number filter for other options\n"
+		"  -f, --filter-contact [name]         use contact as filter for other options\n"
+		"  -g, --filter-number [number]        use number as filter for other options\n"
+		"  -t, --filter-time [time] [time]     use time range as filter for other options\n"
+		"      times can be in seconds since epoch, or YYYY-MM-DD HH:MM:SS\n"
 		"  --replace-number [contact] [num]    replace the number for all contact\n"
 		"                                        references for grouping purposes\n"
 		"  --remove-filtered                   remove the contacts/numbers in the filter\n"
@@ -349,6 +447,7 @@ def printHelp():
 		"  --image-width [value]               set maximum image width\n"
 		"  --image-height [value]              set maximum image height\n"
 		"  --jpg-quality [value]               set jpg image quality\n"
+		"  --shrink-only                       only change media if the size is smaller\n"
 	)
 
 if __name__ == "__main__":

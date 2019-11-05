@@ -4,14 +4,11 @@ import io
 import mimetypes
 from PIL import Image
 import re
+import sys
 import tarfile
 import zipfile
 
 class Parser:
-	smsXML = True
-
-	soup = None
-
 	def __init__(self, data):
 		self.smsXML = True if re.search(r'<smses(?: [^>]*)?>', data) else False
 
@@ -48,15 +45,18 @@ class Parser:
 
 		return contacts
 
-	def countByFilter(self, ctfilter, numfilter):
+	def countByFilter(self, ctfilter, numfilter, timefilter):
 		ctcount = {}
 		numcount = {}
 		mmscount = {}
-		filtersFilled = len(ctfilter) + len(numfilter) != 0
+		filtersFilled = len(ctfilter) + len(numfilter) + len(timefilter) != 0
 
 		if self.smsXML:
 			for node in self.soup.find_all(["sms", "mms"]):
-				if not filtersFilled or node["contact_name"] in ctfilter or node["address"] in numfilter:
+				#time is stored in milliseconds since epoch
+				seconds = int(node["date"]) // 1000
+
+				if not filtersFilled or node["contact_name"] in ctfilter or node["address"] in numfilter or self.inTimeFilter(timefilter, seconds):
 					if node["contact_name"] in ctcount:
 						ctcount[node["contact_name"]] += 1
 					else:
@@ -74,7 +74,10 @@ class Parser:
 							mmscount[node["address"]] = 1
 		else:
 			for call in self.soup.find_all("call"):
-				if not filtersFilled or call["contact_name"] in ctfilter or call["number"] in numfilter:
+				#time is stored in milliseconds since epoch
+				seconds = int(call["date"]) // 1000
+
+				if not filtersFilled or call["contact_name"] in ctfilter or call["number"] in numfilter or self.inTimeFilter(timefilter, seconds):
 					if call["contact_name"] in ctcount:
 						ctcount[call["contact_name"]] += 1
 					else:
@@ -87,30 +90,42 @@ class Parser:
 
 		return (ctcount, numcount, mmscount)
 
-	def removeByFilter(self, ctfilter, numfilter):
+	def removeByFilter(self, ctfilter, numfilter, timefilter):
 		removed = False
 
 		if self.smsXML:
 			for node in self.soup.find_all(["sms", "mms"]):
-				if node["contact_name"] in ctfilter or node["address"] in numfilter:
+				#time is stored in milliseconds since epoch
+				seconds = int(node["date"]) // 1000
+
+				if node["contact_name"] in ctfilter or node["address"] in numfilter or self.inTimeFilter(timefilter, seconds):
 					node.decompose()
 					removed = True
 		else:
 			for call in self.soup.find_all("call"):
-				if call["contact_name"] in ctfilter or call["number"] in numfilter:
+				#time is stored in milliseconds since epoch
+				seconds = int(call["date"]) // 1000
+
+				if call["contact_name"] in ctfilter or call["number"] in numfilter or self.inTimeFilter(timefilter, seconds):
 					call.decompose()
 					removed = True
 
 		if removed:
 			self.updateRemove()
 
-	def replaceNumber(self, contact, number):
+	def replaceNumber(self, contact, number, filterTimes):
 		if self.smsXML:
 			skipMMS = False
 			if number[0] == "^":
 				number = number[1:]
 
 			for node in self.soup.find_all(["sms", "mms"]):
+				#time is stored in milliseconds since epoch
+				seconds = int(node["date"]) // 1000
+
+				if not self.inTimeFilter(timefilter, seconds):
+					continue
+
 				if not skipMMS and "~" in node["address"]:
 					#checks each number in mms
 
@@ -130,17 +145,23 @@ class Parser:
 					node["address"] = number
 		else:
 			for call in self.soup.find_all("call"):
-				if call["contact_name"] == contact:
+				#time is stored in milliseconds since epoch
+				seconds = int(node["date"]) // 1000
+
+				if call["contact_name"] == contact and self.inTimeFilter(timefilter, seconds):
 					call["number"] = number
 
-	def removeNoDuration(self, ctfilter, numfilter):
+	def removeNoDuration(self, ctfilter, numfilter, timefilter):
 		if self.smsXML:
 			raise Exception("Cannot remove no-duration calls from sms file")
 
 		removed = False
 
 		for call in self.soup.find_all("call"):
-			if call["contact_name"] in ctfilter or call["number"] in numfilter:
+			#time is stored in milliseconds since epoch
+			seconds = int(call["date"]) // 1000
+
+			if call["contact_name"] in ctfilter or call["number"] in numfilter or self.inTimeFilter(timefilter, seconds):
 				continue
 
 			if call["duration"] == "0":
@@ -210,7 +231,7 @@ class Parser:
 						del(attrs[attr])
 				node.attrs = attrs
 
-	def extractMedia(self, arname, skiptype, ctfilter, numfilter):
+	def extractMedia(self, arname, skiptype, ctfilter, numfilter, timefilter):
 		if not self.smsXML:
 			raise Exception("Cannot extract media from call file")
 
@@ -253,6 +274,11 @@ class Parser:
 			if numfilter != None and len(numfilter) != 0 and mmsparent["address"] not in numfilter:
 				continue
 
+			#time is stored in milliseconds since epoch
+			seconds = int(mmsparent["date"]) // 1000
+			if timefilter != None and len(timefilter) != 0 and not self.inTimeFilter(timefilter, seconds):
+				continue
+
 			if mtype in skiptype:
 				continue
 
@@ -288,7 +314,7 @@ class Parser:
 
 		ar.close()
 
-	def optimizeImages(self, ctfilter, numfilter, maxWidth, maxHeight, jpgQuality):
+	def optimizeImages(self, ctfilter, numfilter, timefilter, maxWidth, maxHeight, jpgQuality, shrinkOnly):
 		if not self.smsXML:
 			raise Exception("Cannot optimize images from call file")
 
@@ -314,6 +340,11 @@ class Parser:
 			if ctfilter != None and len(ctfilter) != 0 and mmsparent["contact_name"] not in ctfilter:
 				continue
 			if numfilter != None and len(numfilter) != 0 and mmsparent["address"] not in numfilter:
+				continue
+
+			#time is stored in milliseconds since epoch
+			seconds = int(mmsparent["date"]) // 1000
+			if timefilter != None and len(timefilter) != 0 and not self.inTimeFilter(timefilter, seconds):
 				continue
 
 			if mtype in mimetypes_dict:
@@ -346,8 +377,51 @@ class Parser:
 					changed = True
 
 				if changed:
-					newdata = base64.b64encode(tmpbuf.getvalue()).decode("ascii")
-					node.attrs["data"] = newdata
+					if not shrinkOnly or sio.getbuffer().nbytes > tmpbuf.getbuffer().nbytes:
+						newdata = base64.b64encode(tmpbuf.getvalue()).decode("ascii")
+						node.attrs["data"] = newdata
+					else:
+						mmselement = node.parent.parent
+						print("img: " + mmselement.attrs["address"] + ' "' + mmselement.attrs["contact_name"].replace('"', '\\"') + '" ' + mmselement.attrs["readable_date"] + ": image did not shrink!", file=sys.stderr)
+
+	def inTimeFilter(self, timefilter, time):
+		time = int(time)
+
+		for times in timefilter:
+			if time >= times[0] and time <= times[1]:
+				return True
+		return False
+
+	def invertTimeFilter(self, timefilter):
+		inverted = []
+		length = len(timefilter)
+		i = 0
+
+		while i < length:
+			if i == 0:
+				startTime = 0
+				endTime = timefilter[0][0]
+
+				if endTime != 0:
+					inverted.append( (0, max(endTime - 1, 0)) )
+			if i == length - 1:
+				endTime = timefilter[i][1]
+				#end of time?
+				uint32max = 2 ** 32 - 1
+
+				if endTime != uint32max:
+					inverted.append( (endTime + 1, uint32max) )
+				break
+
+			startTime = timefilter[i][1] + 1
+			endTime = timefilter[i + 1][0] - 1
+
+			if startTime != endTime:
+				inverted.append( (startTime, endTime) )
+
+			i += 1
+
+		return inverted
 
 	def removeComments(self, root=None):
 		if root is None:
