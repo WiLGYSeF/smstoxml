@@ -12,11 +12,14 @@ def main(argv):
 	infname = None
 	outfname = None
 
+	#filters
 	filterContacts = set()
 	filterNumbers = set()
 	filterTimes = []
+
 	replaceNumbers = {}
 
+	#options
 	listStats = False
 	removeFiltered = False
 	keepFiltered = False
@@ -26,14 +29,14 @@ def main(argv):
 	doConvert = True
 	stripAttr = False
 	extractfname = None
+	removeComments = False
+	indentation = 1
 
+	#image optimization options
 	imageWidth = -1
 	imageHeight = -1
 	jpgQuality = -1
 	shrinkOnly = False
-
-	removeComments = False
-	indentation = 1
 
 	if len(argv) > 1:
 		i = 1
@@ -85,11 +88,19 @@ def main(argv):
 				try:
 					startTime = int(argv[i + 1])
 				except:
-					startTime = int(time.mktime(time.strptime(argv[i + 1], "%Y-%m-%d %H:%M:%S")))
+					try:
+						startTime = int(time.mktime(time.strptime(argv[i + 1], "%Y-%m-%d %H:%M:%S")))
+					except:
+						print("Error: invalid start time: " + argv[i + 1], file=sys.stderr)
+						exit(1)
 				try:
 					endTime = int(argv[i + 2])
 				except:
-					endTime = int(time.mktime(time.strptime(argv[i + 2], "%Y-%m-%d %H:%M:%S")))
+					try:
+						endTime = int(time.mktime(time.strptime(argv[i + 2], "%Y-%m-%d %H:%M:%S")))
+					except:
+						print("Error: invalid start time: " + argv[i + 1], file=sys.stderr)
+						exit(1)
 
 				if startTime > endTime:
 					print("Error: filter time " + str(startTime) + " and " + str(endTime) + " is in wrong order", file=sys.stderr)
@@ -139,7 +150,11 @@ def main(argv):
 				if argv[i + 1].lower() == "tab" or argv[i + 1].lower() == "tabs" or argv[i + 1].lower() == "t":
 					indentation = "tab"
 				else:
-					indentation = int(argv[i + 1])
+					try:
+						indentation = int(argv[i + 1])
+					except:
+						print("Error: invalid indentation", file=sys.stderr)
+						exit(1)
 				i += 1
 			elif arg == "-e" or arg == "--extract-media":
 				if i == len(argv) - 1:
@@ -153,21 +168,33 @@ def main(argv):
 					printHelp()
 					exit(1)
 
-				imageWidth = int(argv[i + 1])
+				try:
+					imageWidth = int(argv[i + 1])
+				except:
+					print("Error: invalid image width", file=sys.stderr)
+					exit(1)
 				i += 1
 			elif arg == "--image-height":
 				if i == len(argv) - 1:
 					printHelp()
 					exit(1)
 
-				imageHeight = int(argv[i + 1])
+				try:
+					imageHeight = int(argv[i + 1])
+				except:
+					print("Error: invalid image height", file=sys.stderr)
+					exit(1)
 				i += 1
 			elif arg == "--jpg-quality":
 				if i == len(argv) - 1:
 					printHelp()
 					exit(1)
 
-				jpgQuality = int(argv[i + 1])
+				try:
+					jpgQuality = int(argv[i + 1])
+				except:
+					print("Error: invalid jpg quality")
+					exit(1)
 				i += 1
 			elif arg == "--shrink-only":
 				shrinkOnly = True
@@ -232,6 +259,8 @@ def main(argv):
 		condensedtime = []
 		length = len(filterTimes)
 
+		#condense and simplify timeline
+
 		i = 0
 		while i < length:
 			startTime = filterTimes[i][0]
@@ -266,7 +295,10 @@ def main(argv):
 		filterTimes = condensedtime
 
 	if removeNoDuration:
-		parserObj.removeNoDuration(filterContacts, filterNumbers, filterTimes)
+		try:
+			parserObj.removeNoDuration(filterContacts, filterNumbers, filterTimes)
+		except Exception as e:
+			print("Error: " + str(e), file=sys.stderr)
 
 	if len(replaceNumbers) != 0:
 		for contact in replaceNumbers:
@@ -276,6 +308,8 @@ def main(argv):
 		if removeFiltered:
 			parserObj.removeByFilter(filterContacts, filterNumbers, filterTimes)
 		elif keepFiltered:
+			#get the inverse of the filters set
+
 			cdiff = set()
 			ndiff = set()
 			invertTime = parserObj.invertTimeFilter(filterTimes)
@@ -309,7 +343,7 @@ def main(argv):
 			parserObj.removeByFilter(cdiff, ndiff, invertTime)
 
 	if listStats:
-		#refresh list
+		#get contact list after filters
 		contactsList = parserObj.getContacts()
 
 		ctcount, numcount, mmscount = parserObj.countByFilter(filterContacts, filterNumbers, filterTimes)
@@ -380,12 +414,11 @@ def main(argv):
 				#print(mms + ', "' + contactsList[mms] + '", ' + str(mmscount[mms][0]) + ', ' + str(mmscount[mms][1]))
 				print(mms + ', "' + contactsList[mms] + '", ' + str(mmscount[mms][1]))
 
-
 		print("")
 		exit(0)
 
 	if listContacts:
-		#refresh list
+		#get contact list after filters
 		contactsList = parserObj.getContacts()
 
 		sys.stdout.buffer.write("\n".join(list(map(lambda x: x + "," + contactsList[x], contactsList))).encode("utf-8"))
@@ -393,10 +426,22 @@ def main(argv):
 		exit(0)
 
 	if imageWidth != -1 or imageHeight != -1 or jpgQuality != -1:
-		parserObj.optimizeImages(filterContacts, filterNumbers, filterTimes, imageWidth, imageHeight, jpgQuality, shrinkOnly)
+		try:
+			parserObj.optimizeImages(filterContacts, filterNumbers, filterTimes, imageWidth, imageHeight, jpgQuality, shrinkOnly)
+		except Exception as e:
+			print("Error: " + str(e), file=sys.stderr)
+	else:
+		if shrinkOnly:
+			if parserObj.smsXML:
+				print("Warn: --shrink-only was used, but no optimization options were set", file=sys.stderr)
+			else:
+				print("Warn: --shrink-only was used, but file is a call file", file=sys.stderr)
 
 	if extractfname is not None:
-		parserObj.extractMedia(extractfname, set(), filterContacts, filterNumbers, filterTimes)
+		try:
+			parserObj.extractMedia(extractfname, set(), filterContacts, filterNumbers, filterTimes)
+		except Exception as e:
+			print("Error: " + str(e), file=sys.stderr)
 		exit(0)
 
 	if stripAttr:
@@ -410,7 +455,13 @@ def main(argv):
 	output = parserObj.prettify(indent=indentation, tabs=usetabs)
 
 	if revert or not doConvert:
-		output = parser.unescapeInvalidXmlCharacters(output)
+		if parserObj.smsXML:
+			output = parser.unescapeInvalidXmlCharacters(output)
+		else:
+			if revert:
+				print("Warn: --revert was used, but file is a call file", file=sys.stderr)
+			if not doConvert:
+				print("Warn: --no-convert was used, but file is a call file", file=sys.stderr)
 
 	if outfname is not None:
 		try:
@@ -428,6 +479,8 @@ def insertarr(arr, value, cmpfunc, unique=False):
 	length = len(arr)
 	low = 0
 	high = length
+
+	#insert into sorted array
 
 	while low < high:
 		mid = (low + high) // 2
@@ -449,25 +502,25 @@ def printHelp():
 		"Usage: smstoxml.py [input] [output] options...\n"
 		"\n"
 		"  -h, --help                          shows this help menu\n"
-		"  --statistics                        display statistics of sms/calls\n"
+		"  --statistics                        display statistics of sms/calls and exit\n"
 		"  -l, --list                          list the contacts in the file and exit\n"
 		"  -f, --filter-contact [name]         use contact as filter for other options\n"
 		"  -g, --filter-number [number]        use number as filter for other options\n"
 		"  -t, --filter-time [time] [time]     use time range as filter for other options\n"
-		"      times can be in seconds since epoch, or YYYY-MM-DD HH:MM:SS\n"
-		"  --replace-number [contact] [num]    replace the number for all contact\n"
+		"                                        times can be in seconds since epoch, or\n"
+		"                                        YYYY-MM-DD HH:MM:SS\n"
+		"  --replace-number [contact] [num]    replace with new number for contact\n"
 		"                                        references for grouping purposes\n"
-		"  --remove-filtered                   remove the contacts/numbers in the filter\n"
+		"  --remove-filtered                   remove sms/calls in the filter\n"
+		"  --keep-filtered                     remove sms/calls NOT in the filter\n"
 		"  --remove-no-duration                remove zero duration calls for call.xml\n"
-		"                                        files, treats filter as keep\n"
 		"  --remove-comments                   remove comments from the output xml file\n"
-		"  --keep-filtered                     remove contacts/numbers not in the filter\n"
 		"\n"
 		"  -r, --revert                        convert valid XML back to SMSBackupXML\n"
-		"  --no-convert                        do not convert XML, converts by default\n"
+		"  --no-convert                        do not convert XML, default is convert\n"
 		"\n"
 		"  -s, --strip                         strip unnecessary attributes from nodes,\n"
-		"                                        may make file unrestorable (unlikely)\n"
+		"                                        MAY MAKE FILE UNRESTORABLE!\n"
 		"  --indent [value]                    number of spaces for indentation,\n"
 		"                                        or 'tab'\n"
 		"\n"

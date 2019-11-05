@@ -57,8 +57,8 @@ class Parser:
 				seconds = int(node["date"]) // 1000
 
 				if not filtersFilled or node["contact_name"] in ctfilter or node["address"] in numfilter or self.inTimeFilter(timefilter, seconds):
-					sent = False
 					if node.name == "mms":
+						#don't know how to explicitly determine if it was sent
 						"""
 						for addr in node.find_all("addr"):
 							if int(addr["type"]) == 137:
@@ -177,7 +177,7 @@ class Parser:
 
 	def removeNoDuration(self, ctfilter, numfilter, timefilter):
 		if self.smsXML:
-			raise Exception("Cannot remove no-duration calls from sms file")
+			raise Exception("cannot remove no-duration calls from sms file")
 
 		removed = False
 
@@ -257,7 +257,7 @@ class Parser:
 
 	def extractMedia(self, arname, skiptype, ctfilter, numfilter, timefilter):
 		if not self.smsXML:
-			raise Exception("Cannot extract media from call file")
+			raise Exception("cannot extract media from call file")
 
 		mimetypes_dict = {
 			"audio/mpeg": "mp2",
@@ -340,7 +340,7 @@ class Parser:
 
 	def optimizeImages(self, ctfilter, numfilter, timefilter, maxWidth, maxHeight, jpgQuality, shrinkOnly):
 		if not self.smsXML:
-			raise Exception("Cannot optimize images from call file")
+			raise Exception("cannot optimize images from call file")
 
 		mimetypes_dict = {
 			"image/bmp": "bmp",
