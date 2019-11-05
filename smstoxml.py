@@ -199,8 +199,11 @@ def main(argv):
 			elif arg == "--shrink-only":
 				shrinkOnly = True
 			elif arg[0] == "-":
-				print("Error: unknown argument " + arg, file=sys.stderr)
-				exit(1)
+				if infname is None:
+					infname = "-"
+				else:
+					print("Error: unknown argument " + arg, file=sys.stderr)
+					exit(1)
 			else:
 				if infname is None:
 					infname = arg
@@ -212,10 +215,6 @@ def main(argv):
 						exit(1)
 			i += 1
 
-	if infname is None:
-		printHelp()
-		exit(1)
-
 	if removeFiltered and keepFiltered:
 		print("Error: both --remove-filtered and --keep-filtered specified", file=sys.stderr)
 		print("")
@@ -225,12 +224,16 @@ def main(argv):
 	parserObj = None
 
 	try:
-		infile = open(infname, "r", encoding="utf8")
-		data = infile.read()
+		if infname is None or infname == "-":
+			infile = sys.stdin
+		else:
+			infile = open(infname, "r", encoding="utf8")
 
+		data = infile.read()
 		parserObj = Parser(data)
 
-		infile.close()
+		if infile != sys.stdin:
+			infile.close()
 	except Exception as e:
 		print("Error: could not read file: " + infname + ". " + str(e), file=sys.stderr)
 		exit(1)
