@@ -21,11 +21,13 @@ def main(argv):
 	replaceNumbers = {}
 
 	#options
+	listContacts = False
 	listStats = False
+	sortContacts = False
+	sortNumbers = False
 	removeFiltered = False
 	keepFiltered = False
 	removeNoDuration = False
-	listContacts = False
 	revert = False
 	doConvert = True
 	stripAttr = False
@@ -68,6 +70,10 @@ def main(argv):
 				listStats = True
 			elif arg == "-l" or arg == "--list":
 				listContacts = True
+			elif arg == "--sort-contacts":
+				sortContacts = True
+			elif arg == "--sort-numbers":
+				sortNumbers = True
 			elif arg == "-f" or arg == "--filter-contact":
 				if i == len(argv) - 1:
 					printHelp()
@@ -200,6 +206,12 @@ def main(argv):
 		printHelp()
 		exit(1)
 
+	if sortContacts and sortNumbers:
+		print("Error: both --sort-contacts and --sort-numbers specified", file=sys.stderr)
+		print("")
+		printHelp()
+		exit(1)
+
 	parserObj = None
 
 	try:
@@ -217,9 +229,9 @@ def main(argv):
 		print("Error: could not read file: " + infname + ". " + str(e), file=sys.stderr)
 		exit(1)
 
-	contactsList = parserObj.getContacts()
+	contactList = parserObj.getContacts()
 
-	clFilter = filters.ContactListFilter(contactsList)
+	clFilter = filters.ContactListFilter(contactList)
 
 	for num in numberFilterList:
 		try:
@@ -249,6 +261,9 @@ def main(argv):
 		for contact in replaceNumbers:
 			parserObj.replaceNumber(contact, replaceNumbers[contact], timeFilter)
 
+	if listStats and not removeFiltered and not keepFiltered:
+		keepFiltered = True
+
 	if len(clFilter) != 0 or len(timeFilter) != 0:
 		if removeFiltered:
 			parserObj.removeByFilter(clFilter, timeFilter)
@@ -259,69 +274,41 @@ def main(argv):
 
 			parserObj.removeByFilter(invertedClFilter, invertedTimeFilter)
 
-	if listStats:
 		#get contact list after filters
-		contactsList = parserObj.getContacts()
+		contactList = parserObj.getContacts()
 
-		ctcount, numcount, mmscount = parserObj.countByFilter(clFilter, timeFilter)
+	if listStats:
+		numcount, mmscount = parserObj.count()
 		totalCount = 0
 
-		for ct in ctcount:
-			totalCount += ctcount[ct][0]
-			totalCount += ctcount[ct][1]
 		for num in numcount:
-			if len(num) != 0 and contactsList[num] in ctcount:
-				continue
-
 			totalCount += numcount[num][0]
 			totalCount += numcount[num][1]
 
-		print(infname + ":")
-		print("Total Count: " + str(totalCount))
-		print("")
+		print(
+			"%s:\n"
+			"Total Count: %d\n"
+			"" % (infname, totalCount)
+		)
 
 		if parserObj.smsXML:
 			print("Number, Contact, Sent, Received")
 		else:
 			print("Number, Contact, Outgoing, Incoming")
 
-		for num in numcount:
-			if len(num) == 0:
-				continue
+		if sortNumbers:
+			numbers = list(numcount.keys())
+			numbers.sort()
 
-			print(num + ', "' + contactsList[num] + '", ' + str(numcount[num][0]) + ', ' + str(numcount[num][1]))
-
-		#check if there are any contacts not in the numbers list for some reason
-		hasCts = False
-		for ct in ctcount:
-			num = None
-			for n in contactsList:
-				if contactsList[n] == ct:
-					num = n
-					break
-			if num in numcount:
-				continue
-
-			hasCts = True
-			break
-
-		if hasCts:
-			print("")
-			if parserObj.smsXML:
-				print("Number, Contact, Sent, Received")
-			else:
-				print("Number, Contact, Outgoing, Incoming")
-
-			for ct in ctcount:
-				num = None
-				for n in contactsList:
-					if contactsList[n] == ct:
-						num = n
-						break
-				if num in numcount:
-					continue
-
-				print(num + ', "' + ct + '", ' + str(ctcount[ct][0]) + ', ' + str(ctcount[ct][1]))
+			for num in numbers:
+				print('%s, "%s", %d, %d' % (num, contactList[num], numcount[num][0], numcount[num][1]))
+		elif sortContacts:
+			sortedContact = sorted(contactList.items(), key=lambda x: x[1])
+			for item in sortedContact:
+				print('%s, "%s", %d, %d' % (item[0], item[1], numcount[item[0]][0], numcount[item[0]][1]))
+		else:
+			for num in numcount:
+				print('%s, "%s", %d, %d' % (num, contactList[num], numcount[num][0], numcount[num][1]))
 
 		totalMmsCount = 0
 		for mms in mmscount:
@@ -329,24 +316,50 @@ def main(argv):
 			totalMmsCount += mmscount[mms][1]
 
 		if totalMmsCount > 0:
-			print("")
-			print("MMS Total Count: " + str(totalMmsCount))
-			print("")
-			#print("Number, Contact, Sent To, Received From")
-			print("Number, Contact, Count")
+			print(
+				"\n"
+				"MMS Total Count: %d\n"
+				"\n"
+				"Number, Contact, Sent, Received" % (totalMmsCount)
+			)
 
-			for mms in mmscount:
-				#print(mms + ', "' + contactsList[mms] + '", ' + str(mmscount[mms][0]) + ', ' + str(mmscount[mms][1]))
-				print(mms + ', "' + contactsList[mms] + '", ' + str(mmscount[mms][1]))
+			if sortNumbers:
+				numbers = list(mmscount.keys())
+				numbers.sort()
+
+				for mms in numbers:
+					print('%s, "%s", %d' % (mms, contactList[mms], mmscount[mms][1]))
+			elif sortContacts:
+				sortedContact = sorted(contactList.items(), key=lambda x: x[1])
+				for item in sortedContact:
+					if item[0] not in mmscount:
+						continue
+
+					print('%s, "%s", %d, %d' % (item[0], item[1], mmscount[item[0]][0], mmscount[item[0]][1]))
+			else:
+				for mms in mmscount:
+					print('%s, "%s", %d, %d' % (mms, contactList[mms], mmscount[mms][0], mmscount[mms][1]))
 
 		print("")
 		exit(0)
 
 	if listContacts:
-		#get contact list after filters
-		contactsList = parserObj.getContacts()
+		contacts = []
 
-		contacts = list(map(lambda x: x + "," + contactsList[x], contactsList))
+		if sortNumbers:
+			numbers = list(contactList.keys())
+			numbers.sort()
+
+			for num in numbers:
+				contacts.append('%s, "%s"' % (num, contactList[num]))
+		elif sortContacts:
+			sortedContact = sorted(contactList.items(), key=lambda x: x[1])
+			for item in sortedContact:
+				contacts.append('%s, "%s"' % (item[0], item[1]))
+		else:
+			for num in contactList:
+				contacts.append('%s, "%s"' % (num, contactList[num]))
+
 		if len(contacts) != 0:
 			sys.stdout.buffer.write("\n".join(contacts).encode("utf-8"))
 			print("")
@@ -411,6 +424,9 @@ def printHelp():
 		"  -h, --help                          shows this help menu\n"
 		"  --statistics                        display statistics of sms/calls and exit\n"
 		"  -l, --list                          list the contacts in the file and exit\n"
+		"  --sort-contacts                     sort list output by contact\n"
+		"  --sort-numbers                      sort list output by number (default)\n"
+		"\n"
 		"  -f, --filter-contact [name]         use contact as filter for other options\n"
 		"  -g, --filter-number [number]        use number as filter for other options\n"
 		"  -t, --filter-time [time] [time]     use time range as filter for other options\n"

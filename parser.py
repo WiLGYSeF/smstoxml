@@ -9,6 +9,10 @@ import tarfile
 import zipfile
 
 class Parser:
+	SMS_RECEIVED = 1
+	SMS_SENT = 2
+	SMS_DRAFT = 3
+
 	def __init__(self, data):
 		self.smsXML = True if re.search(r'<smses(?: [^>]*)?>', data) else False
 
@@ -24,95 +28,74 @@ class Parser:
 
 		if self.smsXML:
 			for node in self.soup.find_all(["sms", "mms"]):
-				num = node["address"]
+				num, ctname = self.spljoinNumbers(node["address"], node["contact_name"])
+
 				if len(num) == 0:
-					unknown = "(Unknown" + str(unknownnumbers) + ")"
-					contacts[unknown] = node["contact_name"]
+					unknown = "(Unknown%d)" % unknownnumbers
 					unknownnumbers += 1
-				else:
-					#will update to latest contact name
-					contacts[num] = node["contact_name"]
+
+				#will override to latest contact name
+				contacts[num] = ctname
 		else:
 			for call in self.soup.find_all("call"):
 				num = call["number"]
+
 				if len(num) == 0:
-					unknown = "(Unknown" + str(unknownnumbers) + ")"
-					contacts[unknown] = call["contact_name"]
+					num = "(Unknown%d)" % unknownnumbers
 					unknownnumbers += 1
-				else:
-					#will update to latest contact name
-					contacts[num] = call["contact_name"]
+
+				#will override to latest contact name
+				contacts[num] = call["contact_name"]
 
 		return contacts
 
-	def countByFilter(self, clfilter, timefilter):
-		ctcount = {}
+	def count(self):
+		#ctcount = {}
 		numcount = {}
 		mmscount = {}
-		filtersFilled = len(clfilter) + len(timefilter) != 0
+		unknownnumbers = 1
+
+		def incrEntry(d, k, b):
+			if k not in d:
+				d[k] = [0, 0]
+			if b:
+				d[k][0] += 1
+			else:
+				d[k][1] += 1
 
 		if self.smsXML:
 			for node in self.soup.find_all(["sms", "mms"]):
-				#time is stored in milliseconds since epoch
-				seconds = int(node["date"]) // 1000
+				if node.name == "mms":
+					sent = int(node["msg_box"]) == Parser.SMS_SENT
+				else:
+					sent = int(node["type"]) == Parser.SMS_SENT
 
-				if not filtersFilled or clfilter.hasNumberOrContact(node["address"], node["contact_name"]) or timefilter.inTimeline(seconds):
-					if node.name == "mms":
-						#don't know how to explicitly determine if it was sent
-						"""
-						for addr in node.find_all("addr"):
-							if int(addr["type"]) == 137:
-								if addr["address"] != node["address"]:
-									sent = True
-						"""
-						sent = False
-					else:
-						sent = int(node["type"]) == 2
+				#incrEntry(ctcount, node["contact_name"], sent)
 
-					if node["contact_name"] not in ctcount:
-						ctcount[node["contact_name"]] = [0, 0]
-					if sent:
-						ctcount[node["contact_name"]][0] += 1
-					else:
-						ctcount[node["contact_name"]][1] += 1
+				number, _ = self.spljoinNumbers(node["address"], node["contact_name"])
+				if len(number) == 0:
+					number = "(Unknown%d)" % unknownnumbers
+					unknownnumbers += 1
 
-					if node["address"] not in numcount:
-						numcount[node["address"]] = [0, 0]
-					if sent:
-						numcount[node["address"]][0] += 1
-					else:
-						numcount[node["address"]][1] += 1
+				incrEntry(numcount, number, sent)
 
-					if node.name == "mms":
-						if node["address"] not in mmscount:
-							mmscount[node["address"]] = [0, 0]
-						if sent:
-							mmscount[node["address"]][0] += 1
-						else:
-							mmscount[node["address"]][1] += 1
+				if node.name == "mms":
+					incrEntry(mmscount, number, sent)
 		else:
 			for call in self.soup.find_all("call"):
-				#time is stored in milliseconds since epoch
-				seconds = int(call["date"]) // 1000
+				sent = int(call["type"]) == Parser.SMS_SENT
 
-				if not filtersFilled or clfilter.hasNumberOrContact(call["number"], call["contact_name"]) or timefilter.inTimeline(seconds):
-					sent = int(call["type"]) == 2
+				#incrEntry(ctcount, call["contact_name"], sent)
 
-					if call["contact_name"] not in ctcount:
-						ctcount[call["contact_name"]] = [0, 0]
-					if sent:
-						ctcount[call["contact_name"]][0] += 1
-					else:
-						ctcount[call["contact_name"]][1] += 1
+				number = call["number"]
+				if len(number) == 0:
+					number = "(Unknown%d)" % unknownnumbers
+					unknownnumbers += 1
 
-					if call["number"] not in numcount:
-						numcount[call["number"]] = [0, 0]
-					if sent:
-						numcount[call["number"]][0] += 1
-					else:
-						numcount[call["number"]][1] += 1
+				incrEntry(numcount, number, sent)
 
-		return (ctcount, numcount, mmscount)
+		#return (ctcount, numcount, mmscount)
+		return (numcount, mmscount)
 
 	def removeByFilter(self, clfilter, timefilter):
 		removed = False
@@ -139,10 +122,6 @@ class Parser:
 
 	def replaceNumber(self, contact, number, timefilter):
 		if self.smsXML:
-			skipMMS = False
-			if number[0] == "^":
-				number = number[1:]
-
 			for node in self.soup.find_all(["sms", "mms"]):
 				#time is stored in milliseconds since epoch
 				seconds = int(node["date"]) // 1000
@@ -150,21 +129,17 @@ class Parser:
 				if len(timefilter) != 0 and not timefilter.inTimeline(seconds):
 					continue
 
-				if not skipMMS and "~" in node["address"]:
-					#checks each number in mms
+				if node.name == "mms":
+					numbers, contacts = self.splitNumbers(node["address"], node["contact_name"])
 
-					spl = node["contact_name"].split(", ")
-					i = 0
-
-					while i < len(spl):
-						if spl[i] == contact:
+					for i in range(len(contacts)):
+						if contacts[i] == contact:
+							numbers[i] = number_class
 							break
-						i += 1
 
-					if i != len(spl):
-						spl = node["address"].split("~")
-						spl[i] = number
-						node["address"] = "~".join(spl)
+					numberstr, contactstr = self.joinNumbers(numbers, contacts)
+					node["address"] = numberstr
+					node["contact_name"] = contactstr
 				elif node["contact_name"] == contact:
 					node["address"] = number
 		else:
@@ -177,6 +152,23 @@ class Parser:
 
 				if call["contact_name"] == contact:
 					call["number"] = number
+
+	def splitNumbers(self, numberstr, contactstr):
+		numbers = numberstr.split("~")
+		contacts = contactstr.split(", ")
+
+		diff = len(numbers) - len(contacts)
+		for i in range(diff):
+			contacts.append("(Unknown)")
+
+		return ( numbers, contacts )
+
+	def joinNumbers(self, numbers, contacts):
+		return ( "~".join(numbers), ", ".join(contacts))
+
+	def spljoinNumbers(self, numbers, contacts):
+		n, c = self.splitNumbers(numbers, contacts)
+		return self.joinNumbers(n, c)
 
 	def removeNoDuration(self, clfilter, timefilter):
 		if self.smsXML:
