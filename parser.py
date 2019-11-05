@@ -381,11 +381,12 @@ class Parser:
 
 				if maxWidth != -1 or maxHeight != -1:
 					if maxWidth == -1:
-						maxWidth = maxHeight
+						maxWidth = img.width
 					if maxHeight == -1:
-						maxHeight = maxWidth
+						maxHeight = img.height
+
 					if maxWidth < img.width or maxHeight < img.height:
-						img.thumbnail( (maxWidth, maxHeight) )
+						img.thumbnail( (maxWidth, maxHeight), Image.ANTIALIAS)
 						changed = True
 
 				tmpbuf = io.BytesIO()
