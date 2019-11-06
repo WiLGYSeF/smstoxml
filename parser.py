@@ -13,6 +13,8 @@ class Parser:
 	SMS_SENT = 2
 	SMS_DRAFT = 3
 
+	CONTACT_UNKNOWN = "(Unknown)"
+
 	def __init__(self, data):
 		self.smsXML = True if re.search(r'<smses(?: [^>]*)?>', data) else False
 
@@ -218,7 +220,7 @@ class Parser:
 					number = numbers[i]
 					ctname = contacts[i]
 
-					if ctname == "(Unknown)":
+					if ctname == Parser.CONTACT_UNKNOWN:
 						continue
 
 					if ctname in ctList:
@@ -242,7 +244,7 @@ class Parser:
 				if hasTimeFilter and not timefilter.inTimeline(seconds):
 					continue
 
-				if ctname == "(Unknown)":
+				if ctname == Parser.CONTACT_UNKNOWN:
 					continue
 
 				if ctname in ctList:
@@ -264,7 +266,7 @@ class Parser:
 		if padUnknowns:
 			diff = len(numbers) - len(contacts)
 			for i in range(diff):
-				contacts.append("(Unknown)")
+				contacts.append(Parser.CONTACT_UNKNOWN)
 
 		return ( numbers, contacts )
 

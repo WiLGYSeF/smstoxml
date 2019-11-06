@@ -10,6 +10,8 @@ class ContactListFilter:
 		self.filterNumbers = set()
 		self.filterContacts = set()
 
+		self.matchUnknownNumbers = False
+
 	def addNumber(self, number):
 		if number not in self.numberSet:
 			raise Exception(number + " not found")
@@ -62,6 +64,9 @@ class ContactListFilter:
 		return inverted
 
 	def hasNumber(self, number):
+		if self.matchUnknownNumbers and len(number) == 0:
+			return True
+
 		return number in self.filterNumbers
 
 	def hasContact(self, contact):

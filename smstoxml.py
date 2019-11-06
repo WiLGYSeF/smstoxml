@@ -36,6 +36,10 @@ def main(argv):
 	removeComments = False
 	indentation = 1
 
+	fileList = []
+	mergeFiles = False
+	mergeStdout = False
+
 	#image optimization options
 	optimizeImages = False
 	imageWidth = -1
@@ -138,6 +142,11 @@ def main(argv):
 						print("Error: invalid indentation", file=sys.stderr)
 						exit(1)
 				i += 1
+			elif arg == "--merge":
+				mergeFiles = True
+			elif arg == "--merge-out":
+				mergeFiles = True
+				mergeStdout = True
 			elif arg == "-e" or arg == "--extract-media":
 				if i == len(argv) - 1:
 					printHelp()
@@ -193,14 +202,17 @@ def main(argv):
 					print("Error: unknown argument " + arg, file=sys.stderr)
 					exit(1)
 			else:
+				fileList.append(arg)
+
 				if infname is None:
 					infname = arg
 				else:
 					if outfname is None:
 						outfname = arg
 					else:
-						print("Error: too many filenames", file=sys.stderr)
-						exit(1)
+						if not mergeFiles:
+							print("Error: too many filenames", file=sys.stderr)
+							exit(1)
 			i += 1
 
 	if removeFiltered and keepFiltered:
@@ -217,20 +229,69 @@ def main(argv):
 
 	parserObj = None
 
-	try:
-		if infname is None or infname == "-":
-			infile = sys.stdin
-		else:
-			infile = open(infname, "r", encoding="utf8")
+	if mergeFiles:
+		try:
+			parserList = []
 
-		data = infile.read()
-		parserObj = Parser(data)
+			if len(fileList) == 0:
+				print("Error: not enough merge filenames", file=sys.stderr)
+				exit(1)
 
-		if infile != sys.stdin:
-			infile.close()
-	except Exception as e:
-		print("Error: could not read file: " + infname + ". " + str(e), file=sys.stderr)
-		exit(1)
+			if mergeStdout:
+				outfname = None
+			else:
+				outfname = fileList.pop()
+
+			if len(fileList) == 0:
+				print("Error: not enough merge filenames", file=sys.stderr)
+				exit(1)
+
+			for fname in fileList:
+				infile = open(fname, "r", encoding="utf8")
+
+				if parserObj is None:
+					parserObj = Parser(infile.read())
+				else:
+					prsr = Parser(infile.read())
+					if parserObj.smsXML != prsr.smsXML:
+						print("Error: xml file types do not match", file=sys.stderr)
+						exit(1)
+
+					parserList.append(prsr)
+
+				infile.close()
+
+			if parserObj.smsXML:
+				parent = parserObj.soup.find("smses")
+			else:
+				parent = parserObj.soup.find("calls")
+
+			for prsr in parserList:
+				if parserObj.smsXML:
+					nodes = prsr.soup.find_all(["sms", "mms"])
+				else:
+					nodes = prsr.soup.find_all("call")
+
+				for e in nodes:
+					parent.append(e.extract())
+		except Exception as e:
+			print("Error: could not read file: " + infname + ". " + str(e), file=sys.stderr)
+			exit(1)
+	else:
+		try:
+			if infname is None or infname == "-":
+				infile = sys.stdin
+			else:
+				infile = open(infname, "r", encoding="utf8")
+
+			data = infile.read()
+			parserObj = Parser(data)
+
+			if infile != sys.stdin:
+				infile.close()
+		except Exception as e:
+			print("Error: could not read file: " + infname + ". " + str(e), file=sys.stderr)
+			exit(1)
 
 	contactList = parserObj.getContacts()
 
@@ -288,6 +349,8 @@ def main(argv):
 			#get the inverse of the filters set
 			invertedClFilter = clFilter.invert()
 			invertedTimeFilter = timeFilter.invert()
+
+			invertedClFilter.matchUnknownNumbers = True
 
 			parserObj.removeByFilter(invertedClFilter, invertedTimeFilter)
 
@@ -470,6 +533,10 @@ def printHelp():
 		"  -s, --strip                         strip unnecessary attributes from nodes\n"
 		"                                        MAY MAKE FILE UNRESTORABLE!\n"
 		"  --indent [value]                    number of spaces for indentation, or 'tab'\n"
+		"\n"
+		"  --merge                             merge all files together, in order, and\n"
+		"                                        write it to the last filename given\n"
+		"  --merge-out                         output the merged file to stdout\n"
 		"\n"
 		"  -e, --extract-media [file]          extract media to zip file and exit\n"
 		"  --image-width [value]               set maximum image width\n"
