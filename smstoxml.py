@@ -25,6 +25,7 @@ def main(argv):
 	listStats = False
 	sortContacts = False
 	sortNumbers = False
+	normalize = False
 	removeFiltered = False
 	keepFiltered = False
 	removeNoDuration = False
@@ -107,6 +108,8 @@ def main(argv):
 
 				replaceNumbers[argv[i + 1]] = argv[i + 2]
 				i += 2
+			elif arg == "--normalize":
+				normalize = True
 			elif arg == "--remove-filtered":
 				removeFiltered = True
 			elif arg == "--remove-no-duration":
@@ -247,9 +250,21 @@ def main(argv):
 
 	timeFilter.condense()
 
+	filterActions = 0
+
 	if len(clFilter) != 0 or len(timeFilter) != 0:
-		if not removeNoDuration and len(replaceNumbers) == 0 and not removeFiltered and not keepFiltered and not listStats and not optimizeImages and extractfname is None:
+		for b in [normalize, removeNoDuration, len(replaceNumbers) != 0, removeFiltered, keepFiltered, listStats, listContacts, optimizeImages, extractfname is not None]:
+			if b:
+				filterActions += 1
+
+		if filterActions == 0:
 			print("Warn: filters were defined, but not used", file=sys.stderr)
+
+	if normalize:
+		parserObj.normalizeNumbers(clFilter, timeFilter)
+
+		#update contact list
+		contactList = parserObj.getContacts()
 
 	if removeNoDuration:
 		try:
@@ -258,10 +273,12 @@ def main(argv):
 			print("Error: " + str(e), file=sys.stderr)
 
 	if len(replaceNumbers) != 0:
-		for contact in replaceNumbers:
-			parserObj.replaceNumber(contact, replaceNumbers[contact], timeFilter)
+		parserObj.replaceNumbers(replaceNumbers, timeFilter)
 
-	if listStats and not removeFiltered and not keepFiltered:
+		#update contact list
+		contactList = parserObj.getContacts()
+
+	if (listStats or listContacts) and filterActions == 1 and not removeFiltered and not keepFiltered:
 		keepFiltered = True
 
 	if len(clFilter) != 0 or len(timeFilter) != 0:
@@ -274,7 +291,7 @@ def main(argv):
 
 			parserObj.removeByFilter(invertedClFilter, invertedTimeFilter)
 
-		#get contact list after filters
+		#update contact list
 		contactList = parserObj.getContacts()
 
 	if listStats:
@@ -305,6 +322,8 @@ def main(argv):
 		elif sortContacts:
 			sortedContact = sorted(contactList.items(), key=lambda x: x[1])
 			for item in sortedContact:
+				if item[0] not in numcount:
+					continue
 				print('%s, "%s", %d, %d' % (item[0], item[1], numcount[item[0]][0], numcount[item[0]][1]))
 		else:
 			for num in numcount:
@@ -334,7 +353,6 @@ def main(argv):
 				for item in sortedContact:
 					if item[0] not in mmscount:
 						continue
-
 					print('%s, "%s", %d, %d' % (item[0], item[1], mmscount[item[0]][0], mmscount[item[0]][1]))
 			else:
 				for mms in mmscount:
@@ -430,14 +448,20 @@ def printHelp():
 		"  -f, --filter-contact [name]         use contact as filter for other options\n"
 		"  -g, --filter-number [number]        use number as filter for other options\n"
 		"  -t, --filter-time [time] [time]     use time range as filter for other options\n"
-		"                                        times can be in seconds since epoch, -\n"
-		"                                        or YYYY-MM-DD HH:MM:SS\n"
-		"  --replace-number [contact] [num]    replace with new number for contact -\n"
-		"                                        references for grouping purposes\n"
+		"                                        - times can be in seconds since epoch,\n"
+		"                                          or YYYY-MM-DD HH:MM:SS\n"
+		"\n"
+		"  --replace-number [contact] [num]    replace contact with new number\n"
+		"                                        - will only change time filtered\n"
+		"                                          numbers\n"
+		"  --normalize                         attempt to normalize numbers to the\n"
+		"                                        longest version, only changes filtered\n"
+		"                                        numbers\n"
+		"\n"
 		"  --remove-filtered                   remove sms/calls in the filter\n"
-		"  --keep-filtered                     remove sms/calls NOT in the filter\n"
+		"  --keep-filtered                     keep only sms/calls in the filter\n"
 		"  --remove-no-duration                remove zero duration calls for call.xml\n"
-		"                                        anything filtered will not be removed\n"
+		"                                        - filtered numbers will not be removed\n"
 		"  --remove-comments                   remove comments from the output xml file\n"
 		"\n"
 		"  -r, --revert                        convert valid XML back to SMSBackupXML\n"

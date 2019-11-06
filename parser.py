@@ -23,31 +23,49 @@ class Parser:
 		self.soup = bs4.BeautifulSoup(data, "xml")
 
 	def getContacts(self):
-		contacts = {}
+		contactList = {}
 		unknownnumbers = 1
+		unknownnumberssub = 1
 
 		if self.smsXML:
 			for node in self.soup.find_all(["sms", "mms"]):
-				num, ctname = self.spljoinNumbers(node["address"], node["contact_name"])
+				number = node["address"]
+				ctname = node["contact_name"]
 
-				if len(num) == 0:
-					unknown = "(Unknown%d)" % unknownnumbers
+				if node.name == "mms" and "~" in number:
+					#if there are multiple numbers, add all of them separately, and later together, to the contact list
+					numbers, contacts = self.splitNumbers(number, ctname)
+
+					for i in range(len(contacts)):
+						num = numbers[i]
+						if len(num) == 0:
+							num = "(UnknownSub%d)" % unknownnumbersub
+							unknownnumberssub += 1
+
+						#will override to latest contact name
+						contactList[num] = contacts[i]
+
+					#using the version with padded '(Unknown)'s breaks keep-filters
+					#number, ctname = self.joinNumbers(numbers, contacts)
+
+				if len(number) == 0:
+					number = "(Unknown%d)" % unknownnumbers
 					unknownnumbers += 1
 
 				#will override to latest contact name
-				contacts[num] = ctname
+				contactList[number] = ctname
 		else:
 			for call in self.soup.find_all("call"):
-				num = call["number"]
+				number = call["number"]
 
-				if len(num) == 0:
-					num = "(Unknown%d)" % unknownnumbers
+				if len(number) == 0:
+					number = "(Unknown%d)" % unknownnumbers
 					unknownnumbers += 1
 
 				#will override to latest contact name
-				contacts[num] = call["contact_name"]
+				contactList[number] = call["contact_name"]
 
-		return contacts
+		return contactList
 
 	def count(self):
 		#ctcount = {}
@@ -100,74 +118,161 @@ class Parser:
 	def removeByFilter(self, clfilter, timefilter):
 		removed = False
 
+		hasClFilter = clfilter is not None and len(clfilter) != 0
+		hasTimeFilter = timefilter is not None and len(timefilter) != 0
+
 		if self.smsXML:
 			for node in self.soup.find_all(["sms", "mms"]):
+				number = node["address"]
+				ctname = node["contact_name"]
 				#time is stored in milliseconds since epoch
 				seconds = int(node["date"]) // 1000
 
-				if clfilter.hasNumberOrContact(node["address"], node["contact_name"]) or timefilter.inTimeline(seconds):
-					node.decompose()
-					removed = True
+				if hasClFilter and not clfilter.hasNumberOrContact(number, ctname):
+					continue
+				if hasTimeFilter and not timefilter.inTimeline(seconds):
+					continue
+
+				node.decompose()
+				removed = True
 		else:
 			for call in self.soup.find_all("call"):
+				number = call["number"]
+				ctname = call["contact_name"]
 				#time is stored in milliseconds since epoch
 				seconds = int(call["date"]) // 1000
 
-				if clfilter.hasNumberOrContact(call["number"], call["contact_name"]) or timefilter.inTimeline(seconds):
-					call.decompose()
-					removed = True
+				if hasClFilter and not clfilter.hasNumberOrContact(number, ctname):
+					continue
+				if hasTimeFilter and not timefilter.inTimeline(seconds):
+					continue
+
+				call.decompose()
+				removed = True
 
 		if removed:
 			self.updateRemove()
 
-	def replaceNumber(self, contact, number, timefilter):
+	def replaceNumbers(self, contactList, timefilter):
+		hasTimeFilter = timefilter is not None and len(timefilter) != 0
+
 		if self.smsXML:
 			for node in self.soup.find_all(["sms", "mms"]):
 				#time is stored in milliseconds since epoch
 				seconds = int(node["date"]) // 1000
 
-				if len(timefilter) != 0 and not timefilter.inTimeline(seconds):
+				if hasTimeFilter and not timefilter.inTimeline(seconds):
 					continue
 
-				if node.name == "mms":
-					numbers, contacts = self.splitNumbers(node["address"], node["contact_name"])
+				#works for both sms and mms
 
-					for i in range(len(contacts)):
-						if contacts[i] == contact:
-							numbers[i] = number_class
-							break
+				numbers, contacts = self.splitNumbers(node["address"], node["contact_name"], padUnknowns=False)
 
-					numberstr, contactstr = self.joinNumbers(numbers, contacts)
-					node["address"] = numberstr
-					node["contact_name"] = contactstr
-				elif node["contact_name"] == contact:
-					node["address"] = number
+				for i in range(len(contacts)):
+					ctname = contacts[i]
+
+					if ctname not in contactList:
+						continue
+
+					if contactList[ctname] is not None:
+						numbers[i] = contactList[ctname]
+
+				numstr, ctstr = self.joinNumbers(numbers, contacts)
+				node["address"] = numstr
+				node["contact_name"] = ctstr
 		else:
 			for call in self.soup.find_all("call"):
 				#time is stored in milliseconds since epoch
 				seconds = int(call["date"]) // 1000
 
-				if len(timefilter) != 0 and not timefilter.inTimeline(seconds):
+				if hasTimeFilter and not timefilter.inTimeline(seconds):
 					continue
 
-				if call["contact_name"] == contact:
-					call["number"] = number
+				ctname = call["contact_name"]
+				if ctname in contactList and contactList[ctname] is not None:
+					call["number"] = contactList[ctname]
 
-	def splitNumbers(self, numberstr, contactstr):
+	def normalizeNumbers(self, clfilter, timefilter):
+		ctList = {}
+
+		hasClFilter = clfilter is not None and len(clfilter) != 0
+		hasTimeFilter = timefilter is not None and len(timefilter) != 0
+
+		if self.smsXML:
+			for node in self.soup.find_all(["sms", "mms"]):
+				number = node["address"]
+				ctname = node["contact_name"]
+				#time is stored in milliseconds since epoch
+				seconds = int(node["date"]) // 1000
+
+				if hasClFilter and not clfilter.hasNumberOrContact(number, ctname):
+					continue
+				if hasTimeFilter and not timefilter.inTimeline(seconds):
+					continue
+
+				#works for both sms and mms
+
+				numbers, contacts = self.splitNumbers(node["address"], node["contact_name"])
+
+				for i in range(len(contacts)):
+					number = numbers[i]
+					ctname = contacts[i]
+
+					if ctname == "(Unknown)":
+						continue
+
+					if ctname in ctList:
+						if ctList[ctname] is not None and len(ctList[ctname]) <= len(number):
+							if len(ctList[ctname]) == len(number) and ctList[ctname] != number:
+								#ambiguous number, ignore
+								ctList[ctname] = None
+							else:
+								ctList[ctname] = number
+					else:
+						ctList[ctname] = number
+		else:
+			for call in self.soup.find_all("call"):
+				number = call["number"]
+				ctname = call["contact_name"]
+				#time is stored in milliseconds since epoch
+				seconds = int(call["date"]) // 1000
+
+				if hasClFilter and not clfilter.hasNumberOrContact(number, ctname):
+					continue
+				if hasTimeFilter and not timefilter.inTimeline(seconds):
+					continue
+
+				if ctname == "(Unknown)":
+					continue
+
+				if ctname in ctList:
+					if ctList[ctname] is not None and len(ctList[ctname]) <= len(number):
+						if len(ctList[ctname]) == len(number) and ctList[ctname] != number:
+							#ambiguous number, ignore
+							ctList[ctname] = None
+						else:
+							ctList[ctname] = number
+				else:
+					ctList[ctname] = number
+
+		self.replaceNumbers(ctList, timefilter)
+
+	def splitNumbers(self, numberstr, contactstr, padUnknowns=True):
 		numbers = numberstr.split("~")
 		contacts = contactstr.split(", ")
 
-		diff = len(numbers) - len(contacts)
-		for i in range(diff):
-			contacts.append("(Unknown)")
+		if padUnknowns:
+			diff = len(numbers) - len(contacts)
+			for i in range(diff):
+				contacts.append("(Unknown)")
 
 		return ( numbers, contacts )
 
 	def joinNumbers(self, numbers, contacts):
 		return ( "~".join(numbers), ", ".join(contacts))
 
-	def spljoinNumbers(self, numbers, contacts):
-		n, c = self.splitNumbers(numbers, contacts)
+	def spljoinNumbers(self, numbers, contacts, padUnknowns=True):
+		n, c = self.splitNumbers(numbers, contacts, padUnknowns)
 		return self.joinNumbers(n, c)
 
 	def removeNoDuration(self, clfilter, timefilter):
@@ -176,11 +281,16 @@ class Parser:
 
 		removed = False
 
+		hasClFilter = clfilter is not None and len(clfilter) != 0
+		hasTimeFilter = timefilter is not None and len(timefilter) != 0
+
 		for call in self.soup.find_all("call"):
 			#time is stored in milliseconds since epoch
 			seconds = int(call["date"]) // 1000
 
-			if clfilter.hasNumberOrContact(call["number"], call["contact_name"]) or timefilter.inTimeline(seconds):
+			if hasClFilter and clfilter.hasNumberOrContact(call["number"], call["contact_name"]):
+				continue
+			if hasTimeFilter and timefilter.inTimeline(seconds):
 				continue
 
 			if call["duration"] == "0":
@@ -278,6 +388,9 @@ class Parser:
 			atype = "zip"
 		usednames = set()
 
+		hasClFilter = clfilter is not None and len(clfilter) != 0
+		hasTimeFilter = timefilter is not None and len(timefilter) != 0
+
 		for node in self.soup.find_all("part"):
 			mtype = node["ct"]
 			if mtype == "application/smil":
@@ -288,13 +401,12 @@ class Parser:
 				continue
 
 			mmsparent = node.parent.parent
-			if clfilter != None and len(clfilter) != 0:
-				if not clfilter.hasNumberOrContact(mmsparent["address"], mmsparent["contact_name"]):
-					continue
+			if hasClFilter and not clfilter.hasNumberOrContact(mmsparent["address"], mmsparent["contact_name"]):
+				continue
 
 			#time is stored in milliseconds since epoch
 			seconds = int(mmsparent["date"]) // 1000
-			if timefilter != None and len(timefilter) != 0 and not timefilter.inTimeline(seconds):
+			if hasTimeFilter and not timefilter.inTimeline(seconds):
 				continue
 
 			if mtype in skiptype:
@@ -345,6 +457,9 @@ class Parser:
 			"image/tiff": "tiff"
 		}
 
+		hasClFilter = clfilter is not None and len(clfilter) != 0
+		hasTimeFilter = timefilter is not None and len(timefilter) != 0
+
 		for node in self.soup.find_all("part"):
 			mtype = node["ct"]
 			if mtype == "application/smil":
@@ -355,13 +470,12 @@ class Parser:
 				continue
 
 			mmsparent = node.parent.parent
-			if clfilter != None and len(clfilter) != 0:
-				if not clfilter.hasNumberOrContact(mmsparent["address"], mmsparent["contact_name"]):
+			if hasClFilter and not clfilter.hasNumberOrContact(mmsparent["address"], mmsparent["contact_name"]):
 					continue
 
 			#time is stored in milliseconds since epoch
 			seconds = int(mmsparent["date"]) // 1000
-			if timefilter != None and len(timefilter) != 0 and not timefilter.inTimeline(seconds):
+			if hasTimeFilter and not timefilter.inTimeline(seconds):
 				continue
 
 			if mtype in mimetypes_dict:
