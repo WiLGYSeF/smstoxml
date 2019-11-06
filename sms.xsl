@@ -1,10 +1,6 @@
 <?xml version="1.0" encoding="ISO-8859-1"?>
-<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
-	xmlns:msxsl="urn:schemas-microsoft-com:xslt"
-	xmlns:user="http://android.riteshsahu.com">
+<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform" xmlns:msxsl="urn:schemas-microsoft-com:xslt" xmlns:user="http://android.riteshsahu.com">
 <xsl:template match="/">
-
-	<!-- <xsl:text disable-output-escaping='yes'>&lt;!DOCTYPE html&gt;</xsl:text> -->
 	<html>
 	<head>
 		<style>
@@ -41,13 +37,14 @@
 				background-color: #dee8f1;
 			}
 
-			tr td:nth-child(5) {
-				display: none;
-			}
-
 			.emoji {
 				font-size: 18px;
 				vertical-align: middle;
+			}
+
+			.message {
+				min-width: 300px;
+				width: 500px;
 			}
 
 			.mms-sender {
@@ -67,13 +64,6 @@
 		<p>Texts Shown: <span id="textsshown">0</span></p>
 
 		<table id="smses">
-			<colgroup>
-				<col style=""/>
-				<col style=""/>
-				<col style=""/>
-				<col style=""/>
-				<col style="min-width: 300px; width: 500px"/>
-			</colgroup>
 			<tr>
 				<th>Type</th>
 				<th>Number</th>
@@ -115,9 +105,9 @@
 					<td><xsl:value-of select="@address"/></td>
 					<td><xsl:value-of select="@contact_name"/></td>
 					<td><xsl:value-of select="@readable_date"/></td>
-					<td><xsl:value-of select="@date"/></td>
+					<td class="date" style="display: none"><xsl:value-of select="@date"/></td>
 
-					<td>
+					<td class="message">
 						<xsl:choose>
 							<xsl:when test="name() = 'sms'">
 								<xsl:value-of select="@body"/>
@@ -165,7 +155,7 @@
 				CONTACT: 2,
 				DATE: 3,
 				TIMESTAMP: 4,
-				MESSAGE: 5
+				MESSAGE: 5,
 			};
 
 			var useMerged = false;
@@ -177,8 +167,8 @@
 
 				rows.sort(function(a, b){
 					//sort by hidden date value
-					a = parseInt(a.children[4].innerHTML, 10);
-					b = parseInt(b.children[4].innerHTML, 10);
+					a = parseInt(a.getElementsByClassName("date")[0].innerHTML, 10);
+					b = parseInt(b.getElementsByClassName("date")[0].innerHTML, 10);
 
 					if(a < b)
 						return -1;
@@ -233,7 +223,7 @@
 
 							//if numspl and ctspl lengths are not equal, then at least one number is not a contact, it's probably in order
 							while(ctspl.length < numspl.length)
-								ctspl[ctspl.length] = "(Unknown)";
+								ctspl.push("(Unknown)");
 
 							for (var n = 0; n < numspl.length; n++)
 							{

@@ -1,7 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
-                xmlns:msxsl="urn:schemas-microsoft-com:xslt"
-                xmlns:user="http://android.riteshsahu.com">
+<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform" xmlns:msxsl="urn:schemas-microsoft-com:xslt" xmlns:user="http://android.riteshsahu.com">
 <xsl:template match="/">
 	<html>
 	<head>
@@ -76,11 +74,13 @@
 					</td>
 					<td><xsl:value-of select="@number"/></td>
 					<td><xsl:value-of select="@contact_name"/></td>
-					<td><!--<xsl:value-of select="@date"/><br/>--><xsl:value-of select="@readable_date"/></td>
+					<td><xsl:value-of select="@readable_date"/></td>
+					<td class="date" style="display: none"><xsl:value-of select="@date"/><br/></td>
 					<td><xsl:value-of select="@duration"/></td>
 				</tr>
 			</xsl:for-each>
 		</table>
+
 		<script>
 		<![CDATA[
 			var Cols = {
@@ -88,11 +88,35 @@
 				NUMBER: 1,
 				CONTACT: 2,
 				DATE: 3,
-				DURATION: 4
+				TIMESTAMP: 4,
+				DURATION: 5,
 			};
 
 			function prepareTable(tbl)
 			{
+				var rows = Array.from(tbl.rows);
+				rows.splice(0, 1);
+
+				rows.sort(function(a, b){
+					//sort by hidden date value
+					a = parseInt(a.getElementsByClassName("date")[0].innerHTML, 10);
+					b = parseInt(b.getElementsByClassName("date")[0].innerHTML, 10);
+
+					if(a < b)
+						return -1;
+					if(a > b)
+						return 1;
+					return 0;
+				});
+
+				var tbody = tbl.getElementsByTagName("tbody")[0];
+
+				//remove all but header, and create rows back as sorted
+				while(tbody.children.length > 1)
+					tbody.removeChild(tbody.children[1]);
+				for (var i = 0; i < rows.length; i++)
+					tbody.appendChild(rows[i]);
+
 				for (i = 1, len = tbl.rows.length; i < len; i++)
 				{
 					var row = tbl.rows[i];
