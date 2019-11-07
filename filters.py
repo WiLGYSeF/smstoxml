@@ -246,6 +246,9 @@ class TimelineFilter:
 			if self.inclusive:
 				if time == times[0] or time == times[1]:
 					return True
+			else:
+				if times[0] == times[1] and time == time[0]:
+					return True
 		return False
 
 def insertarr(arr, value, cmpfunc, unique=False):

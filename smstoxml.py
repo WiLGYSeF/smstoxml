@@ -60,10 +60,13 @@ def main(argv):
 				continue
 
 			if not parse:
+				fileList.append(arg)
+
 				if infname is None:
 					infname = arg
 				else:
-					outfname = arg
+					if outfname is None:
+						outfname = arg
 
 				i += 1
 				continue
