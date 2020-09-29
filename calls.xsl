@@ -5,26 +5,27 @@
 	<head>
 		<style>
 			body {
-				font-family: arial, sans-serif;
-				color: #000;
+				color: #000000;
 				font-size: 13px;
-				color: #333;
+				font-family: arial, sans-serif;
 			}
 
 			table {
-				font-size: 1em;
-				margin: 0 0 1em;
 				border-collapse: collapse;
 				border-width: 0;
 				empty-cells: show;
+
+				font-size: 1em;
+				margin: 0 0 1em;
 			}
 
 			td, th {
+				background-color: inherit;
 				border: 1px solid #ccc;
+
 				padding: 6px 12px;
 				text-align: left;
 				vertical-align: top;
-				background-color: inherit;
 			}
 
 			th {
