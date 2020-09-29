@@ -19,6 +19,7 @@
 				border-collapse: collapse;
 				border-width: 0;
 				empty-cells: show;
+
 				font-size: 1em;
 				margin: 0 0 1em;
 			}
@@ -27,6 +28,7 @@
 				background-color: inherit;
 				border: 1px solid #ccc;
 				font-size: 13px;
+
 				padding: 5px 10px;
 				text-align: left;
 				vertical-align: middle;
@@ -162,7 +164,7 @@
 
 			function prepareTable(tbl)
 			{
-				var rows = Array.from(tbl.rows);
+				let rows = Array.from(tbl.rows);
 				rows.splice(0, 1);
 
 				rows.sort(function(a, b){
@@ -177,7 +179,7 @@
 					return 0;
 				});
 
-				var tbody = tbl.getElementsByTagName("tbody")[0];
+				let tbody = tbl.getElementsByTagName("tbody")[0];
 
 				//remove all but header, and create rows back as sorted
 				while(tbody.children.length > 1)
@@ -185,11 +187,10 @@
 				for (var i = 0; i < rows.length; i++)
 					tbody.appendChild(rows[i]);
 
-				for (var i = 1, len = tbl.rows.length; i < len; i++)
+				for (let i = 1, len = tbl.rows.length; i < len; i++)
 				{
-					var row = tbl.rows[i];
-
-					var status = row.cells[Cols.TYPE].textContent.trim();
+					let row = tbl.rows[i];
+					let status = row.cells[Cols.TYPE].textContent.trim();
 
 					//color by status
 					switch(status)
@@ -210,25 +211,25 @@
 					//format multiple numbers by newlines
 					row.cells[Cols.NUMBER].textContent = row.cells[Cols.NUMBER].textContent.replace(/~/g, "\n");
 
-					var mms_sender = row.cells[Cols.MESSAGE].getElementsByClassName("mms-sender")[0];
+					let mms_sender = row.cells[Cols.MESSAGE].getElementsByClassName("mms-sender")[0];
 					if(mms_sender !== undefined)
 					{
-						var numspl = row.cells[Cols.NUMBER].textContent.split("\n");
+						let numspl = row.cells[Cols.NUMBER].textContent.split("\n");
 						if(numspl.length > 1)
 						{
 							//if it's a group text, put the sender in bold
 
-							var ctspl = row.cells[Cols.CONTACT].textContent.split(", ");
-							var changed = ctspl.length < numspl.length;
+							let ctspl = row.cells[Cols.CONTACT].textContent.split(", ");
+							let changed = ctspl.length < numspl.length;
 
 							//if numspl and ctspl lengths are not equal, then at least one number is not a contact, it's probably in order
 							while(ctspl.length < numspl.length)
 								ctspl.push("(Unknown)");
 
-							for (var n = 0; n < numspl.length; n++)
+							for (let n = 0; n < numspl.length; n++)
 							{
-								var num = numspl[n].replace(/[^0-9]/g, "");
-								var sender = mms_sender.innerHTML;
+								let num = numspl[n].replace(/[^0-9]/g, "");
+								let sender = mms_sender.innerHTML;
 
 								if(num == sender || (num.length >= 10 && num.substring(num.length - 10) == sender.substring(sender.length - 10)))
 								{
@@ -251,14 +252,14 @@
 
 			function getContacts(tbl)
 			{
-				var contacts = [];
-				var numset = new Set();
+				let contacts = [];
+				let numset = new Set();
 
-				for (var i = 1, len = tbl.rows.length; i < len; i++)
+				for (let i = 1, len = tbl.rows.length; i < len; i++)
 				{
-					var row = tbl.rows[i];
-					var num = row.cells[Cols.NUMBER].textContent;
-					var ct = row.cells[Cols.CONTACT].textContent;
+					let row = tbl.rows[i];
+					let num = row.cells[Cols.NUMBER].textContent;
+					let ct = row.cells[Cols.CONTACT].textContent;
 
 					if(!numset.has(num))
 					{
@@ -281,21 +282,21 @@
 			function populateConversations(conv, contacts)
 			{
 				//store last selected
-				var oldcontact = conv.selectedIndex > 0 ? contacts[conv.selectedIndex - 1][1] : undefined;
-				var oldconvstr = conv.options[conv.selectedIndex].value;
+				let oldcontact = conv.selectedIndex > 0 ? contacts[conv.selectedIndex - 1][1] : undefined;
+				let oldconvstr = conv.options[conv.selectedIndex].value;
 
-				var selected = 0;
-				var curidx = 1;
+				let selected = 0;
+				let curidx = 1;
 
 				while(conv.options.length > 1)
 					conv.removeChild(conv.options[1]);
 
-				var added = new Set();
+				let added = new Set();
 
-				for (var i = 0; i < contacts.length; i++)
+				for (let i = 0; i < contacts.length; i++)
 				{
-					var option = document.createElement("option");
-					var str;
+					let option = document.createElement("option");
+					let str;
 
 					if(useMerged && contacts[i][1] != "(Unknown)")
 					{
@@ -329,16 +330,16 @@
 
 			function filterTable(tbl, conv, contacts)
 			{
-				var selectedNum = undefined;
-				var selectedContact = undefined;
-				var idx = conv.selectedIndex;
+				let selectedNum = undefined;
+				let selectedContact = undefined;
+				let idx = conv.selectedIndex;
 
 				if(idx > 0)
 				{
-					var convstr = conv.options[idx].value;
+					let convstr = conv.options[idx].value;
 					if(!useMerged || convstr.startsWith("(Unknown) "))
 					{
-						var spl = convstr.split(" - ");
+						let spl = convstr.split(" - ");
 						selectedNum = spl[spl.length - 1];
 					}else
 					{
@@ -346,13 +347,13 @@
 					}
 				}
 
-				var total = 0;
+				let total = 0;
 
-				for (var i = 1, len = tbl.rows.length; i < len; i++)
+				for (let i = 1, len = tbl.rows.length; i < len; i++)
 				{
-					var row = tbl.rows[i];
-					var num = row.cells[Cols.NUMBER].textContent;
-					var ct = row.cells[Cols.CONTACT].textContent;
+					let row = tbl.rows[i];
+					let num = row.cells[Cols.NUMBER].textContent;
+					let ct = row.cells[Cols.CONTACT].textContent;
 
 					if((selectedNum == undefined || num == selectedNum) && (selectedContact == undefined || ct == selectedContact))
 					{
@@ -371,17 +372,17 @@
 			{
 				//high surrogate: 0xd800 - 0xdbff
 				//low surrogate: 0xdc00 - 0xdfff
-				var re = new RegExp(/&amp;#5(?:5(?:29[6-9]|[3-9]\d\d)|6\d\d\d|7[0-2]\d\d|73[0-3]\d|734[0-3]);/);
+				let re = new RegExp(/&amp;#5(?:5(?:29[6-9]|[3-9]\d\d)|6\d\d\d|7[0-2]\d\d|73[0-3]\d|734[0-3]);/);
 
-				for (var i = 1, len = tbl.rows.length; i < len; i++)
+				for (let i = 1, len = tbl.rows.length; i < len; i++)
 				{
-					var row = tbl.rows[i];
-					var str = row.cells[Cols.MESSAGE].innerHTML;
-					var msg = "";
+					let row = tbl.rows[i];
+					let str = row.cells[Cols.MESSAGE].innerHTML;
+					let msg = "";
 
 					while(true)
 					{
-						var idx = str.search(re);
+						let idx = str.search(re);
 						if(idx == -1)
 						{
 							msg += str;
@@ -396,10 +397,10 @@
 							continue;
 						}
 
-						var idxoff = idx + 6;
-						var highsurr = parseInt(str.substring(idxoff, idxoff + 5), 10);
+						let idxoff = idx + 6;
+						let highsurr = parseInt(str.substring(idxoff, idxoff + 5), 10);
 						idxoff += 5 + 7;
-						var lowsurr = parseInt(str.substring(idxoff, idxoff + 5), 10);
+						let lowsurr = parseInt(str.substring(idxoff, idxoff + 5), 10);
 
 						if(!isNaN(highsurr) && !isNaN(lowsurr))
 						{
