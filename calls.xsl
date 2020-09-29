@@ -95,7 +95,7 @@
 
 			function prepareTable(tbl)
 			{
-				var rows = Array.from(tbl.rows);
+				let rows = Array.from(tbl.rows);
 				rows.splice(0, 1);
 
 				rows.sort(function(a, b){
@@ -110,19 +110,18 @@
 					return 0;
 				});
 
-				var tbody = tbl.getElementsByTagName("tbody")[0];
+				let tbody = tbl.getElementsByTagName("tbody")[0];
 
 				//remove all but header, and create rows back as sorted
 				while(tbody.children.length > 1)
 					tbody.removeChild(tbody.children[1]);
-				for (var i = 0; i < rows.length; i++)
+				for (let i = 0; i < rows.length; i++)
 					tbody.appendChild(rows[i]);
 
-				for (i = 1, len = tbl.rows.length; i < len; i++)
+				for (let i = 1, len = tbl.rows.length; i < len; i++)
 				{
-					var row = tbl.rows[i];
-
-					var status = row.cells[Cols.TYPE].textContent.trim();
+					let row = tbl.rows[i];
+					let status = row.cells[Cols.TYPE].textContent.trim();
 
 					switch(status)
 					{
@@ -145,11 +144,11 @@
 							break;
 					}
 
-					var time = parseInt(row.cells[Cols.DURATION].textContent.trim());
+					let time = parseInt(row.cells[Cols.DURATION].textContent.trim());
 
-					var hour = Math.floor(time / 3600);
+					let hour = Math.floor(time / 3600);
 					time %= 3600;
-					var min = Math.floor(time / 60);
+					let min = Math.floor(time / 60);
 					time %= 60;
 
 					if(hour > 0)
