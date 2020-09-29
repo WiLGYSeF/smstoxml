@@ -5,12 +5,12 @@ import re
 class Parser:
 	def __init__(self, data):
 		#set true if search returns a match object
-		self.smsXML = True if re.search(r'<smses(?: [^>]*)?>', data) else False
+		self.smsXML = True if re.search(b'<smses(?: [^>]*)?>', data) else False
 
 		if self.smsXML:
 			data = escapeInvalidXmlCharacters(data)
 
-		self.soup = bs4.BeautifulSoup(data, "xml")
+		self.soup = bs4.BeautifulSoup(data.decode("utf-8"), "xml")
 
 
 	def getContacts(self):
@@ -34,8 +34,8 @@ class Parser:
 
 
 def escapeInvalidXmlCharacters(data):
-	regex = re.compile(r'&#(\d+|x[\dA-Fa-f]+);')
-	newdata = ""
+	regex = re.compile(b'&#(\d+|x[\dA-Fa-f]+);')
+	newdata = bytearray()
 	offset = 0
 
 	for match in re.finditer(regex, data):

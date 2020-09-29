@@ -6,7 +6,7 @@ import parser
 
 
 def main(argv):
-	xmlFile = open(argv[1], "r", encoding="utf-8")
+	xmlFile = open(argv[1], "rb")
 
 	smsParser = parser.Parser(xmlFile.read())
 
