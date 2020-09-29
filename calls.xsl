@@ -153,14 +153,14 @@
 
 					if(hour > 0)
 					{
-						row.cells[Cols.DURATION].textContent = hour + "h " + min + "m " + time + "s";
+						row.cells[Cols.DURATION].textContent = `${hour}h ${min}m ${time}s`;
 					}else
 					if(min > 0)
 					{
-						row.cells[Cols.DURATION].textContent = min + "m " + time + "s";
+						row.cells[Cols.DURATION].textContent = `${min}m ${time}s`;
 					}else
 					{
-						row.cells[Cols.DURATION].textContent = time + "s";
+						row.cells[Cols.DURATION].textContent = `${time}s`;
 					}
 				}
 			}
