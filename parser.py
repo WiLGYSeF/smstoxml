@@ -95,13 +95,13 @@ class Parser:
 					lines[c] = ("\t" * i) + line[i:]
 				c += 1
 
-			output = "\n".join(lines).encode("utf-8")
+			output = "\n".join(lines)
 		else:
 			if indent != 1:
-				wspace = re.compile(b'^(\s*)', re.MULTILINE)
-				output = wspace.sub(b"\\1" * indent, "\n".join(lines).encode("utf-8"))
+				wspace = re.compile('^(\s*)', re.MULTILINE)
+				output = wspace.sub("\\1" * indent, "\n".join(lines))
 			else:
-				output = "\n".join(lines).encode("utf-8")
+				output = "\n".join(lines)
 		return output
 
 
