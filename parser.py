@@ -177,8 +177,24 @@ class Parser:
 			#self.updateRemove()
 
 
-	def replaceNumberByNumber(self, searchNum, replaceNum, timefilter=None):
+	def replace(self, search, replace, searchType, replaceType, timefilter=None):
 		hasTimeFilter = timefilter is not None and len(timefilter) != 0
+
+		def modifyContactInfo(num, ctname):
+			numbers, contacts = self.splitMmsContacts(num, ctname)
+			for i in range(len(numbers)):
+				b = False
+				if searchType == "number":
+					b = numbers[i] == search
+				elif searchType == "contact":
+					b = contacts[i] == search
+
+				if b:
+					if replaceType == "number":
+						numbers[i] = replace
+					elif replaceType == "contact":
+						contacts[i] = replace
+			return self.joinMmsContacts(numbers, contacts)
 
 		if self.smsXML:
 			for node in self.soup.find_all(["sms", "mms"]):
@@ -188,12 +204,7 @@ class Parser:
 					if not timefilter.inTimeline(seconds):
 						continue
 
-				numbers, contacts = self.splitMmsContacts(node["address"], node["contact_name"])
-				for i in range(len(numbers)):
-					if numbers[i] == searchNum:
-						numbers[i] = replaceNum
-
-				numstr, ctstr = self.joinMmsContacts(numbers, contacts)
+				numstr, ctstr = modifyContactInfo(node["address"], node["contact_name"])
 				node["address"] = numstr
 				node["contact_name"] = ctstr
 		else:
@@ -204,51 +215,20 @@ class Parser:
 					if not timefilter.inTimeline(seconds):
 						continue
 
-				numbers, contacts = self.splitMmsContacts(call["number"], call["contact_name"])
-				for i in range(len(numbers)):
-					if numbers[i] == searchNum:
-						numbers[i] = replaceNum
-
-				numstr, ctstr = self.joinMmsContacts(numbers, contacts)
+				numstr, ctstr = modifyContactInfo(call["number"], call["contact_name"])
 				call["number"] = numstr
 				call["contact_name"] = ctstr
+
+
+	def replaceNumberByNumber(self, searchNum, replaceNum, timefilter=None):
+		self.replace(searchNum, replaceNum, "number", "number", timefilter)
 
 
 	def replaceNumberByContact(self, searchContact, replaceNum, timefilter=None):
-		hasTimeFilter = timefilter is not None and len(timefilter) != 0
+		self.replace(searchContact, replaceNum, "contact", "number", timefilter)
 
-		if self.smsXML:
-			for node in self.soup.find_all(["sms", "mms"]):
-				if hasTimeFilter:
-					#time is stored in milliseconds since epoch
-					seconds = int(node["date"]) // 1000
-					if not timefilter.inTimeline(seconds):
-						continue
 
-				numbers, contacts = self.splitMmsContacts(node["address"], node["contact_name"])
-				for i in range(len(numbers)):
-					if contacts[i] == searchContact:
-						numbers[i] = replaceNum
 
-				numstr, ctstr = self.joinMmsContacts(numbers, contacts)
-				node["address"] = numstr
-				node["contact_name"] = ctstr
-		else:
-			for call in self.soup.find_all("call"):
-				if hasTimeFilter:
-					#time is stored in milliseconds since epoch
-					seconds = int(node["date"]) // 1000
-					if not timefilter.inTimeline(seconds):
-						continue
-
-				numbers, contacts = self.splitMmsContacts(call["number"], call["contact_name"])
-				for i in range(len(numbers)):
-					if contacts[i] == searchContact:
-						numbers[i] = replaceNum
-
-				numstr, ctstr = self.joinMmsContacts(numbers, contacts)
-				call["number"] = numstr
-				call["contact_name"] = ctstr
 
 
 	def removeNoDuration(self, clfilter, timefilter):
