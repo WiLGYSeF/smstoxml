@@ -228,7 +228,12 @@ class Parser:
 		self.replace(searchContact, replaceNum, "contact", "number", timefilter)
 
 
+	def replaceContactByContact(self, searchContact, replaceContact, timefilter=None):
+		self.replace(searchContact, replaceContact, "contact", "contact", timefilter)
 
+
+	def replaceContactByNumber(self, searchNumber, replaceContact, timefilter=None):
+		self.replace(searchNum, replaceContact, "number", "contact", timefilter)
 
 
 	def removeNoDuration(self, clfilter, timefilter):
