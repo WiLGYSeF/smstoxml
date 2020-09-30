@@ -16,6 +16,8 @@ class Parser:
 	def getFullContacts(self):
 		contactList = self.getContacts()
 		self.convertMmsContacts(contactList)
+		self.renameUnknownContacts(contactList)
+
 		return contactList
 
 
@@ -58,6 +60,17 @@ class Parser:
 						contactList[numspl[i]] = ctsub
 					del contactList[num]
 
+
+	def renameUnknownContacts(self, contactList):
+		ctItems = []
+		unknownCount = 1
+		for num, ctname in contactList.items():
+			ctItems.append( (num, ctname) )
+
+		for num, ctname in ctItems:
+			if ctname == "(Unknown)":
+				contactList[num] = "(Unknown %d)" % unknownCount
+				unknownCount += 1
 
 
 	def prettify(self, indent=2, tabs=False):
