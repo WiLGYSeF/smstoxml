@@ -73,8 +73,8 @@ class Parser:
 				unknownCount += 1
 
 
-	def modifyByFilter(self, clfilter, timefilter, doRemove=True):
-		modified = False
+	def removeByFilter(self, clfilter, timefilter, removeFiltered=True, matchesAnyFilter=False):
+		removed = False
 
 		def inFilters(num, ctname, seconds):
 			b = (clfilter is not None and clfilter.hasNumberOrContact(num, ctname)) or (timefilter is not None and timefilter.inTimeline(seconds))
@@ -89,7 +89,7 @@ class Parser:
 
 				if inFilters(num, ctname, seconds):
 					node.decompose()
-					modified = True
+					removed = True
 		else:
 			for call in self.soup.find_all("call"):
 				num = call["number"]
@@ -99,9 +99,35 @@ class Parser:
 
 				if inFilters(num, ctname, seconds):
 					call.decompose()
-					modified = True
+					removed = True
 
-		if modified:
+		if removed:
+			pass
+			#self.updateRemove()
+
+
+	def removeNoDuration(self, clfilter, timefilter):
+		if self.smsXML:
+			raise Exception("cannot remove no-duration calls from sms file")
+
+		removed = False
+
+		def inFilters(num, ctname, seconds):
+			b = (clfilter is not None and clfilter.hasNumberOrContact(num, ctname)) or (timefilter is not None and timefilter.inTimeline(seconds))
+			return b if doRemove else not b
+
+		for call in self.soup.find_all("call"):
+			#time is stored in milliseconds since epoch
+			seconds = int(call["date"]) // 1000
+
+			if inFilters(call["number"], call["contact_name"], seconds):
+				continue
+
+			if call["duration"] == "0":
+				call.decompose()
+				removed = True
+
+		if removed:
 			pass
 			#self.updateRemove()
 
