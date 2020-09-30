@@ -3,6 +3,10 @@ import re
 
 
 class Parser:
+	SMS_RECEIVED = 1
+	SMS_SENT = 2
+	SMS_DRAFT = 3
+
 	def __init__(self, data):
 		#set true if search returns a match object
 		self.smsXML = True if re.search(b'<smses(?: [^>]*)?>', data) else False
@@ -38,6 +42,47 @@ class Parser:
 				#will override to latest contact name
 				contactList[number] = call["contact_name"]
 		return contactList
+
+
+	def count(self):
+		counter = {}
+
+		def incr(s, k, sent):
+			obj = counter
+			if isinstance(s, list):
+				for p in s:
+					if p not in obj:
+						obj[p] = {}
+					obj = obj[p]
+			else:
+				if s not in counter:
+					counter[s] = {}
+				obj = counter[s]
+
+			if k not in obj:
+				obj[k] = {
+					"sent": 0,
+					"received": 0,
+				}
+
+			obj[k]["sent" if sent else "received"] += 1
+
+		if self.smsXML:
+			for node in self.soup.find_all(["sms", "mms"]):
+				sent = int(node["msg_box" if node.name == "mms" else "type"]) == Parser.SMS_SENT
+				numbers, contacts = self.splitMmsContacts(node["address"], node["contact_name"])
+
+				for i in range(len(numbers)):
+					incr([node.name, "numbers"], numbers[i], sent)
+					incr([node.name, "contacts"], contacts[i], sent)
+		else:
+			for call in self.soup.find_all("call"):
+				sent = int(call["type"]) == Parser.SMS_SENT
+
+				incr(["call", "numbers"], call["number"], sent)
+				incr(["call", "contacts"], call["contact_name"], sent)
+
+		return counter
 
 
 	def convertMmsContacts(self, contactList):
