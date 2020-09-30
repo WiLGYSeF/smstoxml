@@ -131,15 +131,17 @@ class Parser:
 		removed = False
 
 		def inFilters(num, ctname, seconds):
+			hasClFilter = clfilter is not None and len(clfilter) != 0
+			hasTimeFilter = timefilter is not None and len(timefilter.timeline) != 0
 			b = False
 
 			if matchesAnyFilter:
-				b = (clfilter is not None and clfilter.hasNumberOrContact(num, ctname)) or (timefilter is not None and timefilter.inTimeline(seconds))
+				b = (hasClFilter and clfilter.hasNumberOrContact(num, ctname)) or (hasTimeFilter and timefilter.inTimeline(seconds))
 			else:
-				if clfilter is not None:
+				if hasClFilter:
 					b = clfilter.hasNumberOrContact(num, ctname)
-				if timefilter is not None:
-					if clfilter is None:
+				if hasTimeFilter:
+					if not hasClFilter:
 						b = True
 					b = b and timefilter.inTimeline(seconds)
 
