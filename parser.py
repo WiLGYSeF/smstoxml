@@ -30,6 +30,25 @@ class Parser:
 				#will override to latest contact name
 				contactList[number] = call["contact_name"]
 
+		ctItems = []
+		for num, ctname in contactList.items():
+			ctItems.append( (num, ctname) )
+
+		for num, ctname in ctItems:
+			if "~" in num:
+				numspl = num.split("~")
+				ctnamespl = ctname.split(", ")
+
+				if len(numspl) >= len(ctnamespl):
+					for i in range(len(numspl)):
+						if i < len(ctnamespl):
+							ctsub = ctnamespl[i]
+						else:
+							ctsub = "(Unknown)"
+
+						contactList[numspl[i]] = ctsub
+					del contactList[num]
+
 		return contactList
 
 
