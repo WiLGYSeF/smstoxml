@@ -77,8 +77,19 @@ class Parser:
 		removed = False
 
 		def inFilters(num, ctname, seconds):
-			b = (clfilter is not None and clfilter.hasNumberOrContact(num, ctname)) or (timefilter is not None and timefilter.inTimeline(seconds))
-			return b if doRemove else not b
+			b = False
+
+			if matchesAnyFilter:
+				b = (clfilter is not None and clfilter.hasNumberOrContact(num, ctname)) or (timefilter is not None and timefilter.inTimeline(seconds))
+			else:
+				if clfilter is not None:
+					b = clfilter.hasNumberOrContact(num, ctname)
+				if timefilter is not None:
+					if clfilter is None:
+						b = True
+					b = b and timefilter.inTimeline(seconds)
+
+			return b if removeFiltered else not b
 
 		if self.smsXML:
 			for node in self.soup.find_all(["sms", "mms"]):
