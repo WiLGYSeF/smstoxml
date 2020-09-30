@@ -115,6 +115,10 @@ class Parser:
 		return numberlist, contactlist
 
 
+	def joinMmsContacts(self, numbers, contacts):
+		return "~".join(numbers), ", ".join(contacts)
+
+
 	def renameUnknownContacts(self, contactList):
 		ctItems = []
 		unknownCount = 1
@@ -171,6 +175,43 @@ class Parser:
 		if removed:
 			pass
 			#self.updateRemove()
+
+
+	def replaceNumberByNumber(self, searchNum, replaceNum, timefilter=None):
+		hasTimeFilter = timefilter is not None and len(timefilter) != 0
+
+		if self.smsXML:
+			for node in self.soup.find_all(["sms", "mms"]):
+				if hasTimeFilter:
+					#time is stored in milliseconds since epoch
+					seconds = int(node["date"]) // 1000
+					if not timefilter.inTimeline(seconds):
+						continue
+
+				numbers, contacts = self.splitMmsContacts(node["address"], node["contact_name"])
+				for i in range(len(numbers)):
+					if numbers[i] == searchNum:
+						numbers[i] = replaceNum
+
+				numstr, ctstr = self.joinMmsContacts(numbers, contacts)
+				node["address"] = numstr
+				node["contact_name"] = ctstr
+		else:
+			for call in self.soup.find_all("call"):
+				if hasTimeFilter:
+					#time is stored in milliseconds since epoch
+					seconds = int(node["date"]) // 1000
+					if not timefilter.inTimeline(seconds):
+						continue
+
+				numbers, contacts = self.splitMmsContacts(call["number"], call["contact_name"])
+				for i in range(len(numbers)):
+					if numbers[i] == searchNum:
+						numbers[i] = replaceNum
+
+				numstr, ctstr = self.joinMmsContacts(numbers, contacts)
+				call["number"] = numstr
+				call["contact_name"] = ctstr
 
 
 	def removeNoDuration(self, clfilter, timefilter):
