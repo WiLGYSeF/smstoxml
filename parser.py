@@ -3,6 +3,10 @@ import re
 
 
 class Parser:
+	SMS_RECEIVED = 1
+	SMS_SENT = 2
+	SMS_DRAFT = 3
+
 	def __init__(self, data):
 		#set true if search returns a match object
 		self.smsXML = True if re.search(b'<smses(?: [^>]*)?>', data) else False
@@ -40,25 +44,75 @@ class Parser:
 		return contactList
 
 
+	def count(self):
+		counter = {}
+
+		def incr(s, k, sent):
+			obj = counter
+			if isinstance(s, list):
+				for p in s:
+					if p not in obj:
+						obj[p] = {}
+					obj = obj[p]
+			else:
+				if s not in counter:
+					counter[s] = {}
+				obj = counter[s]
+
+			if k not in obj:
+				obj[k] = {
+					"sent": 0,
+					"received": 0,
+				}
+
+			obj[k]["sent" if sent else "received"] += 1
+
+		if self.smsXML:
+			for node in self.soup.find_all(["sms", "mms"]):
+				sent = int(node["msg_box" if node.name == "mms" else "type"]) == Parser.SMS_SENT
+				numbers, contacts = self.splitMmsContacts(node["address"], node["contact_name"])
+
+				for i in range(len(numbers)):
+					incr([node.name, "numbers"], numbers[i], sent)
+					incr([node.name, "contacts"], contacts[i], sent)
+		else:
+			for call in self.soup.find_all("call"):
+				sent = int(call["type"]) == Parser.SMS_SENT
+
+				incr(["call", "numbers"], call["number"], sent)
+				incr(["call", "contacts"], call["contact_name"], sent)
+
+		return counter
+
+
 	def convertMmsContacts(self, contactList):
 		ctItems = []
 		for num, ctname in contactList.items():
 			ctItems.append( (num, ctname) )
 
 		for num, ctname in ctItems:
-			if "~" in num:
-				numspl = num.split("~")
-				ctnamespl = ctname.split(", ")
+			numbers, contacts = self.splitMmsContacts(num, ctname)
+			if len(numbers) > 1:
+				for i in range(len(numbers)):
+					contactList[numbers[i]] = contacts[i]
+				del contactList[num]
 
-				if len(numspl) >= len(ctnamespl):
-					for i in range(len(numspl)):
-						if i < len(ctnamespl):
-							ctsub = ctnamespl[i]
-						else:
-							ctsub = "(Unknown)"
 
-						contactList[numspl[i]] = ctsub
-					del contactList[num]
+	def splitMmsContacts(self, numbers, contacts):
+		numberlist = []
+		contactlist = []
+
+		if "~" in numbers:
+			numberlist.extend(numbers.split("~"))
+			contactlist.extend(contacts.split(", "))
+
+			while len(numberlist) >= len(contactlist):
+				contactlist.append("(Unknown)")
+		else:
+			numberlist = [numbers]
+			contactlist = [contacts]
+
+		return numberlist, contactlist
 
 
 	def renameUnknownContacts(self, contactList):
@@ -71,6 +125,78 @@ class Parser:
 			if ctname == "(Unknown)":
 				contactList[num] = "(Unknown %d)" % unknownCount
 				unknownCount += 1
+
+
+	def removeByFilter(self, clfilter, timefilter, removeFiltered=True, matchesAnyFilter=False):
+		removed = False
+
+		def inFilters(num, ctname, seconds):
+			hasClFilter = clfilter is not None and len(clfilter) != 0
+			hasTimeFilter = timefilter is not None and len(timefilter.timeline) != 0
+			b = False
+
+			if matchesAnyFilter:
+				b = (hasClFilter and clfilter.hasNumberOrContact(num, ctname)) or (hasTimeFilter and timefilter.inTimeline(seconds))
+			else:
+				if hasClFilter:
+					b = clfilter.hasNumberOrContact(num, ctname)
+				if hasTimeFilter:
+					if not hasClFilter:
+						b = True
+					b = b and timefilter.inTimeline(seconds)
+
+			return b if removeFiltered else not b
+
+		if self.smsXML:
+			for node in self.soup.find_all(["sms", "mms"]):
+				num = node["address"]
+				ctname = node["contact_name"]
+				#time is stored in milliseconds since epoch
+				seconds = int(node["date"]) // 1000
+
+				if inFilters(num, ctname, seconds):
+					node.decompose()
+					removed = True
+		else:
+			for call in self.soup.find_all("call"):
+				num = call["number"]
+				ctname = call["contact_name"]
+				#time is stored in milliseconds since epoch
+				seconds = int(call["date"]) // 1000
+
+				if inFilters(num, ctname, seconds):
+					call.decompose()
+					removed = True
+
+		if removed:
+			pass
+			#self.updateRemove()
+
+
+	def removeNoDuration(self, clfilter, timefilter):
+		if self.smsXML:
+			raise Exception("cannot remove no-duration calls from sms file")
+
+		removed = False
+
+		def inFilters(num, ctname, seconds):
+			b = (clfilter is not None and clfilter.hasNumberOrContact(num, ctname)) or (timefilter is not None and timefilter.inTimeline(seconds))
+			return b if doRemove else not b
+
+		for call in self.soup.find_all("call"):
+			#time is stored in milliseconds since epoch
+			seconds = int(call["date"]) // 1000
+
+			if inFilters(call["number"], call["contact_name"], seconds):
+				continue
+
+			if call["duration"] == "0":
+				call.decompose()
+				removed = True
+
+		if removed:
+			pass
+			#self.updateRemove()
 
 
 	def prettify(self, indent=2, tabs=False):

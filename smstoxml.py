@@ -2,6 +2,8 @@
 
 import sys
 
+from contactlistfilter import ContactListFilter
+from timelinefilter import TimelineFilter
 import parser
 
 
