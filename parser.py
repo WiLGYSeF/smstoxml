@@ -173,8 +173,7 @@ class Parser:
 					removed = True
 
 		if removed:
-			pass
-			#self.updateRemove()
+			self.updateCount()
 
 
 	def replace(self, search, replace, searchType, replaceType, timefilter=None):
@@ -258,8 +257,35 @@ class Parser:
 				removed = True
 
 		if removed:
-			pass
-			#self.updateRemove()
+			self.updateCount()
+
+
+	def updateCount(self):
+		if self.smsXML:
+			nodes = self.soup.find("smses").contents
+		else:
+			nodes = self.soup.find("calls").contents
+
+		nlen = len(nodes)
+		idx = 0
+
+		while idx < nlen:
+			node = nodes[idx]
+			if idx < nlen - 1 and isinstance(node, bs4.element.NavigableString) and node == "\n":
+				#find extra newlines and delete them
+				nlx = idx + 1
+				while nlx < nlen and isinstance(nodes[nlx], bs4.element.NavigableString) and nodes[nlx] == "\n":
+					#NavigableString has no decompose()
+					nodes[nlx].extract()
+					nlen -= 1
+			idx += 1
+
+		if self.smsXML:
+			smses = self.soup.find("smses")
+			smses["count"] = len(self.soup.find_all("sms")) + len(self.soup.find_all("mms"))
+		else:
+			calls = self.soup.find("calls")
+			calls["count"] = len(self.soup.find_all("call"))
 
 
 	def prettify(self, indent=2, tabs=False):
