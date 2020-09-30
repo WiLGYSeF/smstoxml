@@ -46,19 +46,28 @@ class Parser:
 			ctItems.append( (num, ctname) )
 
 		for num, ctname in ctItems:
-			if "~" in num:
-				numspl = num.split("~")
-				ctnamespl = ctname.split(", ")
+			numbers, contacts = self.splitMmsContacts(num, ctname)
+			if len(numbers) > 1:
+				for i in range(len(numbers)):
+					contactList[numbers[i]] = contacts[i]
+				del contactList[num]
 
-				if len(numspl) >= len(ctnamespl):
-					for i in range(len(numspl)):
-						if i < len(ctnamespl):
-							ctsub = ctnamespl[i]
-						else:
-							ctsub = "(Unknown)"
 
-						contactList[numspl[i]] = ctsub
-					del contactList[num]
+	def splitMmsContacts(self, numbers, contacts):
+		numberlist = []
+		contactlist = []
+
+		if "~" in numbers:
+			numberlist.extend(numbers.split("~"))
+			contactlist.extend(contacts.split(", "))
+
+			while len(numberlist) >= len(contactlist):
+				contactlist.append("(Unknown)")
+		else:
+			numberlist = [numbers]
+			contactlist = [contacts]
+
+		return numberlist, contactlist
 
 
 	def renameUnknownContacts(self, contactList):
