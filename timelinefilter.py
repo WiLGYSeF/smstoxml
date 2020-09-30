@@ -109,10 +109,6 @@ class TimelineFilter:
 		return inverted
 
 
-	def __len__(self):
-		return len(self.timeline)
-
-
 	def inTimeline(self, time):
 		if not self.condensed:
 			self.condense()

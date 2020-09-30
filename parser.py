@@ -73,13 +73,11 @@ class Parser:
 				unknownCount += 1
 
 
-	def modifyByFilter(self, clfilter, doRemove=True):
+	def modifyByFilter(self, clfilter, timefilter, doRemove=True):
 		modified = False
 
-		hasClFilter = clfilter is not None and len(clfilter) != 0
-
-		def inFilters(num, ctname):
-			b = hasClFilter and clfilter.hasNumberOrContact(num, ctname)
+		def inFilters(num, ctname, seconds):
+			b = (clfilter is not None and clfilter.hasNumberOrContact(num, ctname)) or (timefilter is not None and timefilter.inTimeline(seconds))
 			return b if doRemove else not b
 
 		if self.smsXML:
@@ -89,7 +87,7 @@ class Parser:
 				#time is stored in milliseconds since epoch
 				seconds = int(node["date"]) // 1000
 
-				if inFilters(num, ctname):
+				if inFilters(num, ctname, seconds):
 					node.decompose()
 					modified = True
 		else:
@@ -99,7 +97,7 @@ class Parser:
 				#time is stored in milliseconds since epoch
 				seconds = int(call["date"]) // 1000
 
-				if inFilters(num, ctname):
+				if inFilters(num, ctname, seconds):
 					call.decompose()
 					modified = True
 
