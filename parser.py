@@ -33,6 +33,57 @@ class Parser:
 		return contactList
 
 
+	def prettify(self, indent=2, tabs=False):
+		lines = self.soup.prettify().split("\n")
+
+		if self.hasStylesheet():
+			if self.smsXML:
+				lines.insert(1, '<?xml-stylesheet type="text/xsl" href="sms.xsl"?>')
+			else:
+				lines.insert(1, '<?xml-stylesheet type="text/xsl" href="calls.xsl"?>')
+
+		if tabs:
+			c = 0
+			while c < len(lines):
+				line = lines[c]
+
+				i = 0
+				while i < len(line) and line[i] == " ":
+					i += 1
+
+				if i != 0:
+					lines[c] = ("\t" * i) + line[i:]
+				c += 1
+
+			output = "\n".join(lines).encode("utf-8")
+		else:
+			if indent != 1:
+				wspace = re.compile(b'^(\s*)', re.MULTILINE)
+				output = wspace.sub(b"\\1" * indent, "\n".join(lines).encode("utf-8"))
+			else:
+				output = "\n".join(lines).encode("utf-8")
+		return output
+
+
+	def hasStylesheet(self):
+		for child in self.soup.children:
+			if isinstance(child, bs4.element.XMLProcessingInstruction):
+				if str(child).startswith("xml-stylesheet"):
+					return True
+		return False
+
+
+	def __str__(self):
+		lines = str(self.soup).split("\n")
+
+		if not self.hasStylesheet():
+			if self.smsXML:
+				lines.insert(1, '<?xml-stylesheet type="text/xsl" href="sms.xsl"?>')
+			else:
+				lines.insert(1, '<?xml-stylesheet type="text/xsl" href="calls.xsl"?>')
+		return "\n".join(lines)
+
+
 def escapeInvalidXmlCharacters(data):
 	regex = re.compile(b'&#(\d+|x[\dA-Fa-f]+);')
 	newdata = bytearray()
