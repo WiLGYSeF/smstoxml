@@ -271,5 +271,18 @@ def escapeInvalidXmlCharacters(data):
 	return newdata
 
 
+def unescapeEscapedAmpersands(data):
+	regex = re.compile('body=("[^"]*(?:&amp;#)[^"]*"|\'[^\']*(?:&amp;#)[^\']*\')')
+	newdata = ""
+	offset = 0
+
+	for match in re.finditer(regex, data):
+		newdata += data[offset:match.start()] + data[match.start():match.end()].replace("&amp;#", "&#")
+		offset = match.end()
+	newdata += data[offset:]
+
+	return newdata
+
+
 def isValidXML(c):
 	return c == 0x09 or c == 0x0a or c == 0x0d or (c >= 0x20 and c <= 0xd7ff) or (c >= 0xe000 and c <= 0xfffd) or (c >= 0x10000 and c <= 0x10ffff)
