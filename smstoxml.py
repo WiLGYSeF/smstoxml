@@ -2,6 +2,7 @@
 
 import sys
 
+from filters import ContactListFilter
 import parser
 
 

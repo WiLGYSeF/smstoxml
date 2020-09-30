@@ -73,6 +73,41 @@ class Parser:
 				unknownCount += 1
 
 
+	def modifyByFilter(self, clfilter, doRemove=True):
+		modified = False
+
+		hasClFilter = clfilter is not None and len(clfilter) != 0
+
+		def inFilters(num, ctname):
+			b = hasClFilter and clfilter.hasNumberOrContact(num, ctname)
+			return b if doRemove else not b
+
+		if self.smsXML:
+			for node in self.soup.find_all(["sms", "mms"]):
+				num = node["address"]
+				ctname = node["contact_name"]
+				#time is stored in milliseconds since epoch
+				seconds = int(node["date"]) // 1000
+
+				if inFilters(num, ctname):
+					node.decompose()
+					modified = True
+		else:
+			for call in self.soup.find_all("call"):
+				num = call["number"]
+				ctname = call["contact_name"]
+				#time is stored in milliseconds since epoch
+				seconds = int(call["date"]) // 1000
+
+				if inFilters(num, ctname):
+					call.decompose()
+					modified = True
+
+		if modified:
+			pass
+			#self.updateRemove()
+
+
 	def prettify(self, indent=2, tabs=False):
 		lines = self.soup.prettify().split("\n")
 
