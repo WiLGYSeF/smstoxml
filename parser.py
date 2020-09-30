@@ -13,6 +13,12 @@ class Parser:
 		self.soup = bs4.BeautifulSoup(data.decode("utf-8"), "xml")
 
 
+	def getFullContacts(self):
+		contactList = self.getContacts()
+		self.convertMmsContacts(contactList)
+		return contactList
+
+
 	def getContacts(self):
 		contactList = {}
 
@@ -29,7 +35,10 @@ class Parser:
 
 				#will override to latest contact name
 				contactList[number] = call["contact_name"]
+		return contactList
 
+
+	def convertMmsContacts(self, contactList):
 		ctItems = []
 		for num, ctname in contactList.items():
 			ctItems.append( (num, ctname) )
@@ -49,7 +58,6 @@ class Parser:
 						contactList[numspl[i]] = ctsub
 					del contactList[num]
 
-		return contactList
 
 
 	def prettify(self, indent=2, tabs=False):
