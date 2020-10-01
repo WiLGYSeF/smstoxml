@@ -280,7 +280,7 @@ class Parser:
 		self.replace(searchContact, replaceContact, "contact", "contact", timefilter)
 
 
-	def replaceContactByNumber(self, searchNumber, replaceContact, timefilter=None):
+	def replaceContactByNumber(self, searchNum, replaceContact, timefilter=None):
 		self.replace(searchNum, replaceContact, "number", "contact", timefilter)
 
 
