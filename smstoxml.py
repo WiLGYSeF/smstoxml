@@ -3,6 +3,7 @@
 #requires python3-bs4, python3-pil, python3-lxml
 
 import argparse
+import json
 import sys
 
 from contactlistfilter import ContactListFilter
@@ -12,13 +13,13 @@ import parser
 
 def main(argv):
 	aparser = argparse.ArgumentParser(description="")
-	aparser.add_argument("-l", "--list", action="store_true", help="list the contacts in the file")
+	agroup = aparser.add_mutually_exclusive_group()
+	agroup.add_argument("-l", "--list", action="store_true", help="list the contacts in the file and exit")
+	agroup.add_argument("--statistics", action="store_true", help="display statistics of entries and exit")
 
 	agroup = aparser.add_mutually_exclusive_group()
 	agroup.add_argument("--sort-contact", action="store_true", help="sort list output by contact")
 	agroup.add_argument("--sort-number", action="store_true", help="sort list output by number (default)")
-
-	aparser.add_argument("--statistics", action="store_true", help="display statistics of entries")
 
 	aparser.add_argument("-f", "--filter-contact", metavar="NAME", action="append", help="add contact to filter")
 	aparser.add_argument("-g", "--filter-number", metavar="NUM", action="append", help="add number to filter")
@@ -110,6 +111,11 @@ def main(argv):
 			mainParser.replaceContactByNumber(num, ct)
 
 	contactList = mainParser.getFullContacts()
+
+	if argspace.statistics:
+		counter = mainParser.count()
+		print(json.dumps(counter, indent=2))
+		exit(0)
 
 
 if __name__ == "__main__":

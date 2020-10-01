@@ -76,19 +76,60 @@ class Parser:
 			obj[k]["sent" if sent else "received"] += 1
 
 		if self.smsXML:
+			sSent = 0
+			sRecv = 0
+			mSent = 0
+			mRecv = 0
+
 			for node in self.soup.find_all(["sms", "mms"]):
 				sent = int(node["msg_box" if node.name == "mms" else "type"]) == Parser.SMS_SENT
 				numbers, contacts = self.splitMmsContacts(node["address"], node["contact_name"])
 
+				if node.name == "sms":
+					if sent:
+						sSent += 1
+					else:
+						sRecv += 1
+				else:
+					if sent:
+						mSent += 1
+					else:
+						mRecv += 1
+
 				for i in range(len(numbers)):
 					incr([node.name, "numbers"], numbers[i], sent)
 					incr([node.name, "contacts"], contacts[i], sent)
+
+			if "sms" in counter:
+				counter["sms"]["total"] = {
+					"sent": sSent,
+					"received": sRecv
+				}
+			if "mms" in counter:
+				counter["mms"]["total"] = {
+					"sent": mSent,
+					"received": mRecv
+				}
 		else:
+			cSent = 0
+			cRecv = 0
+
 			for call in self.soup.find_all("call"):
 				sent = int(call["type"]) == Parser.SMS_SENT
 
+				if sent:
+					cSent += 1
+				else:
+					cRecv += 1
+
 				incr(["call", "numbers"], call["number"], sent)
 				incr(["call", "contacts"], call["contact_name"], sent)
+
+			if "call" in counter:
+				counter["call"]["total"] = {
+					"sent": cSent,
+					"received": cRecv
+				}
 
 		return counter
 
