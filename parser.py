@@ -379,11 +379,11 @@ class Parser:
 					pass
 
 
-	def extractMedia(self, arname, excludeMimetypes, clfilter=None, timefilter=None):
+	def extractMedia(self, arname, artype=None, excludeMimetypes=None, clfilter=None, timefilter=None):
 		if not self.smsXML:
 			raise Exception("cannot extract media from call file")
 
-		archive = archiver.Archiver(arname)
+		archive = archiver.Archiver(arname, type=artype)
 		usedNames = set()
 		hasClFilter = clfilter is not None and len(clfilter) != 0
 		hasTimeFilter = timefilter is not None and len(timefilter.timeline) != 0
@@ -392,8 +392,6 @@ class Parser:
 			mtype = node["ct"]
 			if mtype == "application/smil":
 				continue
-
-			#node["data"] doesnt exist anymore?
 			if "data" not in node.attrs:
 				continue
 
@@ -405,7 +403,7 @@ class Parser:
 			if hasTimeFilter and not timefilter.inTimeline(seconds):
 				continue
 
-			if mtype in excludeMimetypes:
+			if excludeMimetypes is not None and mtype in excludeMimetypes:
 				continue
 
 			if "name" in node:
@@ -462,8 +460,6 @@ class Parser:
 				continue
 			if mtype not in mimetypes_dict:
 				continue
-
-			#node["data"] doesnt exist anymore?
 			if "data" not in node.attrs:
 				continue
 
