@@ -1,3 +1,4 @@
+from collections import deque
 import bs4
 import re
 
@@ -310,6 +311,24 @@ class Parser:
 			KEEPATTR = set(["contact_name", "date", "duration", "number", "readable_date", "type"])
 			for node in self.soup.find_all("call"):
 				delattrib(node, KEEPATTR)
+
+
+	def removeComments(self, root=None):
+		if root is None:
+			root = self.soup
+
+		nodeque = deque([root])
+		while len(nodeque) > 0:
+			node = nodeque.popleft()
+			if isinstance(node, bs4.element.Comment):
+				#Comment has no decompose()
+				node.extract()
+			else:
+				try:
+					for c in node.children:
+						nodeque.append(c)
+				except:
+					pass
 
 
 	def prettify(self, indent=2, tabs=False):
