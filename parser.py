@@ -181,7 +181,7 @@ class Parser:
 
 
 	def replace(self, search, replace, searchType, replaceType, timefilter=None):
-		hasTimeFilter = timefilter is not None and len(timefilter) != 0
+		hasTimeFilter = timefilter is not None and len(timefilter.timeline) != 0
 
 		def modifyContactInfo(num, ctname):
 			numbers, contacts = self.splitMmsContacts(num, ctname)
