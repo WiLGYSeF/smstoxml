@@ -133,6 +133,19 @@ def main(argv):
 		print(json.dumps(counter, indent=argspace.indent))
 		exit(0)
 
+	if argspace.list:
+		if argspace.sort_contact:
+			items = sorted(contactList.items())
+		else:
+			items = sorted(contactList.items(), key=lambda x: x[1])
+
+		for num, ctname in items:
+			if argspace.sort_contact:
+				unicode_print("%s: %s" % (ctname, num))
+			else:
+				unicode_print("%s: %s" % (num, ctname))
+		exit(0)
+
 
 if __name__ == "__main__":
 	main(sys.argv)
