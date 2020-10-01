@@ -361,11 +361,13 @@ class Parser:
 					incr += 1
 			else:
 				ext = mimetype.guessMimetype(mtype)
-				name = "%s-%s.%s" % (mmsparent["date"], mmsparent["contact_name"], ext)
+				if ext is not None and len(ext) != 0:
+					ext = "." + ext
+				name = "%s-%s%s" % (mmsparent["date"], mmsparent["contact_name"], ext)
 
 				incr = 1
 				while name in usedNames:
-					name = "%s-%s_%d.%s" % (mmsparent["date"], mmsparent["contact_name"], incr, ext)
+					name = "%s-%s_%d%s" % (mmsparent["date"], mmsparent["contact_name"], incr, ext)
 					incr += 1
 
 			data = base64.b64decode(node.attrs["data"])
