@@ -4,9 +4,9 @@ import zipfile
 
 
 class Archiver:
-	def __init__(self, name, type=None, compression=None):
+	def __init__(self, name, type_=None, compression=None):
 		self.name = name
-		self.arType = type
+		self.arType = type_
 
 		if self.arType not in ["tar", "tgz", "zip"]:
 			if self.name.endswith(".tgz") or self.name.endswith(".tar.gz"):
