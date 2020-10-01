@@ -94,6 +94,7 @@ def main(argv):
 	if argspace.filter_time is not None:
 		for start, end in argspace.filter_time:
 			timeFilter.addTimeRange(start, end)
+	timeFilter.condense()
 
 	if argspace.remove_no_duration and not mainParser.smsXML:
 		mainParser.removeNoDuration(clFilter, timeFilter)
