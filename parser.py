@@ -288,6 +288,30 @@ class Parser:
 			calls["count"] = len(self.soup.find_all("call"))
 
 
+	def stripAttrs(self):
+		def delattrib(obj, keep):
+			attrs = list(filter(lambda x: x not in keep, obj.attrs))
+			for a in attrs:
+				del obj.attrs[a]
+
+		if self.smsXML:
+			KEEPATTR = set(["address", "body", "contact_name", "date", "date_sent", "read", "readable_date", "type"])
+			for node in self.soup.find_all("sms"):
+				delattrib(node, KEEPATTR)
+
+			KEEPATTR = set(["chset", "cid", "cl", "ct", "data", "name", "seq", "text"])
+			for node in self.soup.find_all("part"):
+				delattrib(node, KEEPATTR)
+
+				#strip out crlf from mms part formatting
+				if "text" in node.attrs and "seq" in node.attrs and node.attrs["seq"] == "-1":
+					node.attrs["text"] = node.attrs["text"].replace("&#13;&#10;", "")
+		else:
+			KEEPATTR = set(["contact_name", "date", "duration", "number", "readable_date", "type"])
+			for node in self.soup.find_all("call"):
+				delattrib(node, KEEPATTR)
+
+
 	def prettify(self, indent=2, tabs=False):
 		lines = self.soup.prettify().split("\n")
 
