@@ -129,6 +129,9 @@ def main(argv):
 	except:
 		argspace.indent = 2
 
+	if argspace.extract_media is not None:
+		mainParser.extractMedia(argspace.extract_media, clfilter=clFilter, timefilter=timeFilter)
+
 	if argspace.stats:
 		counter = mainParser.count()
 		unicode_print(json.dumps(counter, indent=argspace.indent))
