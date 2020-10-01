@@ -15,7 +15,7 @@ def main(argv):
 	aparser = argparse.ArgumentParser(description="")
 	agroup = aparser.add_mutually_exclusive_group()
 	agroup.add_argument("-l", "--list", action="store_true", help="list the contacts in the file and exit")
-	agroup.add_argument("--statistics", action="store_true", help="display statistics of entries and exit")
+	agroup.add_argument("--stats", action="store_true", help="display statistics of entries and exit")
 
 	agroup = aparser.add_mutually_exclusive_group()
 	agroup.add_argument("--sort-contact", action="store_true", help="sort list output by contact")
@@ -39,7 +39,7 @@ def main(argv):
 	aparser.add_argument("--remove-comments", action="store_true", help="remove comments from output")
 
 	agroup = aparser.add_mutually_exclusive_group()
-	agroup.add_argument("--revert-escape", action="store_true", help="revert escaping invalid XML")
+	agroup.add_argument("--revert-escape", action="store_true", help="revert escaped invalid XML")
 	agroup.add_argument("--no-escape", action="store_true", help="do not escape invalid XML") #?
 
 	aparser.add_argument("--strip", action="store_true", help="strips non-critical attributes from entries, MAY AFFECT RESTORATION")
@@ -129,7 +129,7 @@ def main(argv):
 	except:
 		argspace.indent = 2
 
-	if argspace.statistics:
+	if argspace.stats:
 		counter = mainParser.count()
 		unicode_print(json.dumps(counter, indent=argspace.indent))
 		exit(0)
