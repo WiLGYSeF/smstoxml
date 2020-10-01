@@ -55,9 +55,27 @@ def main(argv):
 
 	argspace = aparser.parse_args()
 
-	smsParser = parser.Parser(xmlFile.read())
+	with open(argspace.inputs[0], "rb") as f:
+		mainParser = parser.Parser(f.read())
+		if mainParser.smsXML:
+			collection = mainParser.soup.find("smses")
+		else:
+			collection = mainParser.soup.find("calls")
 
-	xmlFile.close()
+	if len(argspace.inputs) > 1:
+		for i in range(1, len(argspace.inputs)):
+			with open(argspace.inputs[i], "rb") as f:
+				mergeParser = parser.Parser(f.read())
+				if mergeParser.smsXML != mainParser.smsXML:
+					raise Exception("cannot merge mixed file types")
+
+				if mainParser.smsXML:
+					nodes = mergeParser.soup.find_all(["sms", "mms"])
+				else:
+					nodes = mergeParser.soup.find_all("call")
+
+				for n in nodes:
+					collection.append(n.extract())
 
 
 if __name__ == "__main__":
