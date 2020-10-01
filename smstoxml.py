@@ -47,6 +47,7 @@ def main(argv):
 	aparser.add_argument("--indent", metavar="VALUE", action="store", help="indent entries by VALUE spaces, or 'tab'")
 
 	aparser.add_argument("--extract-media", metavar="FILE", action="store", help="extract media files to FILE archive")
+	aparser.add_argument("--no-write-optimized-images", action="store_true", help="do not write optimized images into the output file")
 	aparser.add_argument("--image-width", metavar="VALUE", action="store", help="set maximum image width")
 	aparser.add_argument("--image-height", metavar="VALUE", action="store", help="set maximum image height")
 	aparser.add_argument("--jpg-quality", metavar="VALUE", action="store", help="set jpg image quality")
@@ -129,22 +130,8 @@ def main(argv):
 	except:
 		argspace.indent = 2
 
-	if any(map(lambda x: x is not None, [argspace.image_width, argspace.image_height, argspace.jpg_quality])):
-		width = argspace.image_width
-		height = argspace.image_height
-		quality = argspace.jpg_quality
-
-		if width is not None:
-			width = int(width)
-		if height is not None:
-			height = int(height)
-		if quality is not None:
-			quality = int(quality)
-
-		mainParser.optimizeImages(clfilter=clFilter, timefilter=timeFilter, maxWidth=width, maxHeight=height, jpgQuality=quality, onlyShrink=argspace.shrink_only)
-
-	if argspace.extract_media is not None:
-		mainParser.extractMedia(argspace.extract_media, clfilter=clFilter, timefilter=timeFilter)
+	if not argspace.no_write_optimized_images:
+		optimizeAndExtractIfEnabled(mainParser, argspace, clFilter, timeFilter)
 
 	if argspace.stats:
 		counter = mainParser.count()
@@ -175,6 +162,31 @@ def main(argv):
 			f.write(mainParser.prettify(indent=argspace.indent).encode("ascii", errors="xmlcharrefreplace"))
 	else:
 		print(mainParser.prettify(indent=argspace.indent).encode("ascii", errors="xmlcharrefreplace").decode("ascii"))
+
+	if argspace.no_write_optimized_images:
+		optimizeAndExtractIfEnabled(mainParser, argspace, clFilter, timeFilter)
+
+
+def optimizeImages(mainParser, argspace, clFilter, timeFilter):
+	width = argspace.image_width
+	height = argspace.image_height
+	quality = argspace.jpg_quality
+
+	if width is not None:
+		width = int(width)
+	if height is not None:
+		height = int(height)
+	if quality is not None:
+		quality = int(quality)
+
+	mainParser.optimizeImages(clfilter=clFilter, timefilter=timeFilter, maxWidth=width, maxHeight=height, jpgQuality=quality, onlyShrink=argspace.shrink_only)
+
+
+def optimizeAndExtractIfEnabled(mainParser, argspace, clFilter, timeFilter):
+	if any(map(lambda x: x is not None, [argspace.image_width, argspace.image_height, argspace.jpg_quality])):
+		optimizeImages(mainParser, argspace, clFilter, timeFilter)
+	if argspace.extract_media is not None:
+		mainParser.extractMedia(argspace.extract_media, clfilter=clFilter, timefilter=timeFilter)
 
 
 def unicode_print(s):
