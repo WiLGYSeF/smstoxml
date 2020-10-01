@@ -16,6 +16,7 @@ def main(argv):
 	agroup = aparser.add_mutually_exclusive_group()
 	agroup.add_argument("-l", "--list", action="store_true", help="list the contacts in the file")
 	agroup.add_argument("--stats", action="store_true", help="display statistics of entries")
+	aparser.add_argument("--no-output", action="store_true", help="do not write output when using --list or --stats, use - as the output file")
 
 	agroup = aparser.add_mutually_exclusive_group()
 	agroup.add_argument("--sort-contact", action="store_true", help="sort list output by contact")
@@ -154,15 +155,16 @@ def main(argv):
 	if argspace.strip:
 		mainParser.stripAttrs()
 
-	outputBuf = mainParser.prettify(indent=argspace.indent).encode("ascii", errors="xmlcharrefreplace")
-	if argspace.revert_escape:
-		outputBuf = parser.unescapeEscapedAmpersands(outputBuf)
+	if not argspace.no_output:
+		outputBuf = mainParser.prettify(indent=argspace.indent).encode("ascii", errors="xmlcharrefreplace")
+		if argspace.revert_escape:
+			outputBuf = parser.unescapeEscapedAmpersands(outputBuf)
 
-	if argspace.output != "-":
-		with open(argspace.output, "wb") as f:
-			f.write(outputBuf)
-	else:
-		print(outputBuf.decode("ascii"))
+		if argspace.output != "-":
+			with open(argspace.output, "wb") as f:
+				f.write(outputBuf)
+		else:
+			print(outputBuf.decode("ascii"))
 
 	if argspace.no_write_optimized_images:
 		optimizeAndExtractIfEnabled(mainParser, argspace, clFilter, timeFilter)
