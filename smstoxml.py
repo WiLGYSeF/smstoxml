@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 
-#requires python3-bs4, python3-pil, python3-lxml
 
 import argparse
 import json
 import sys
+
+import yaml
 
 from contactlistfilter import ContactListFilter
 from timelinefilter import TimelineFilter
@@ -16,6 +17,7 @@ def main(argv):
 	agroup = aparser.add_mutually_exclusive_group()
 	agroup.add_argument("-l", "--list", action="store_true", help="list the contacts in the file")
 	agroup.add_argument("--stats", action="store_true", help="display statistics of entries")
+	aparser.add_argument("--yaml", action="store_true", help="output statistics as YAML instead of JSON")
 	aparser.add_argument("--no-output", action="store_true", help="do not write output when using --list or --stats, use - as the output file")
 
 	agroup = aparser.add_mutually_exclusive_group()
@@ -135,7 +137,10 @@ def main(argv):
 
 	if argspace.stats:
 		counter = mainParser.count()
-		unicode_print(json.dumps(counter, indent=argspace.indent))
+		if argspace.yaml:
+			unicode_print(yaml.dump(counter))
+		else:
+			unicode_print(json.dumps(counter, indent=argspace.indent))
 
 	if argspace.list:
 		if argspace.sort_contact:

@@ -1,7 +1,8 @@
 from collections import deque
 import base64
-import bs4
 import re
+
+import bs4
 
 import archiver
 import media
