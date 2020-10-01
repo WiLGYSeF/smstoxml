@@ -512,35 +512,23 @@ class Parser:
 					print('img: %s "%s" %s: image did not shrink' % (mmselement.attrs["address"], mmselement.attrs["contact_name"].replace('"', '\\"'), mmselement.attrs["readable_date"]), file=sys.stderr)
 
 
-	def prettify(self, indent=2, tabs=False):
+	def prettify(self, indent=2):
 		lines = self.soup.prettify().split("\n")
 
-		if self.hasStylesheet():
+		if not self.hasStylesheet():
 			if self.smsXML:
 				lines.insert(1, '<?xml-stylesheet type="text/xsl" href="sms.xsl"?>')
 			else:
 				lines.insert(1, '<?xml-stylesheet type="text/xsl" href="calls.xsl"?>')
 
-		if tabs:
-			c = 0
-			while c < len(lines):
-				line = lines[c]
-
-				i = 0
-				while i < len(line) and line[i] == " ":
-					i += 1
-
-				if i != 0:
-					lines[c] = ("\t" * i) + line[i:]
-				c += 1
-
-			output = "\n".join(lines)
-		else:
-			if indent != 1:
-				wspace = re.compile('^(\s*)', re.MULTILINE)
-				output = wspace.sub("\\1" * indent, "\n".join(lines))
+		if indent != 1:
+			wspace = re.compile('^(\s+)', re.MULTILINE)
+			if indent == "\t":
+				output = wspace.sub("\t", "\n".join(lines))
 			else:
-				output = "\n".join(lines)
+				output = wspace.sub(" " * indent, "\n".join(lines))
+		else:
+			output = "\n".join(lines)
 		return output
 
 
