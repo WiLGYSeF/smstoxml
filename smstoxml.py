@@ -14,8 +14,8 @@ import parser
 def main(argv):
 	aparser = argparse.ArgumentParser(description="")
 	agroup = aparser.add_mutually_exclusive_group()
-	agroup.add_argument("-l", "--list", action="store_true", help="list the contacts in the file and exit")
-	agroup.add_argument("--statistics", action="store_true", help="display statistics of entries and exit")
+	agroup.add_argument("-l", "--list", action="store_true", help="list the contacts in the file")
+	agroup.add_argument("--stats", action="store_true", help="display statistics of entries")
 
 	agroup = aparser.add_mutually_exclusive_group()
 	agroup.add_argument("--sort-contact", action="store_true", help="sort list output by contact")
@@ -39,7 +39,7 @@ def main(argv):
 	aparser.add_argument("--remove-comments", action="store_true", help="remove comments from output")
 
 	agroup = aparser.add_mutually_exclusive_group()
-	agroup.add_argument("--revert-escape", action="store_true", help="revert escaping invalid XML")
+	agroup.add_argument("--revert-escape", action="store_true", help="revert escaped invalid XML")
 	agroup.add_argument("--no-escape", action="store_true", help="do not escape invalid XML") #?
 
 	aparser.add_argument("--strip", action="store_true", help="strips non-critical attributes from entries, MAY AFFECT RESTORATION")
@@ -47,6 +47,7 @@ def main(argv):
 	aparser.add_argument("--indent", metavar="VALUE", action="store", help="indent entries by VALUE spaces, or 'tab'")
 
 	aparser.add_argument("--extract-media", metavar="FILE", action="store", help="extract media files to FILE archive")
+	aparser.add_argument("--no-write-optimized-images", action="store_true", help="do not write optimized images into the output file")
 	aparser.add_argument("--image-width", metavar="VALUE", action="store", help="set maximum image width")
 	aparser.add_argument("--image-height", metavar="VALUE", action="store", help="set maximum image height")
 	aparser.add_argument("--jpg-quality", metavar="VALUE", action="store", help="set jpg image quality")
@@ -129,10 +130,12 @@ def main(argv):
 	except:
 		argspace.indent = 2
 
-	if argspace.statistics:
+	if not argspace.no_write_optimized_images:
+		optimizeAndExtractIfEnabled(mainParser, argspace, clFilter, timeFilter)
+
+	if argspace.stats:
 		counter = mainParser.count()
 		unicode_print(json.dumps(counter, indent=argspace.indent))
-		exit(0)
 
 	if argspace.list:
 		if argspace.sort_contact:
@@ -145,7 +148,6 @@ def main(argv):
 				unicode_print("%s: %s" % (ctname, num))
 			else:
 				unicode_print("%s: %s" % (num, ctname))
-		exit(0)
 
 	if argspace.remove_comments:
 		mainParser.removeComments()
@@ -158,6 +160,31 @@ def main(argv):
 			f.write(mainParser.prettify(indent=argspace.indent).encode("ascii", errors="xmlcharrefreplace"))
 	else:
 		print(mainParser.prettify(indent=argspace.indent).encode("ascii", errors="xmlcharrefreplace").decode("ascii"))
+
+	if argspace.no_write_optimized_images:
+		optimizeAndExtractIfEnabled(mainParser, argspace, clFilter, timeFilter)
+
+
+def optimizeImages(mainParser, argspace, clFilter, timeFilter):
+	width = argspace.image_width
+	height = argspace.image_height
+	quality = argspace.jpg_quality
+
+	if width is not None:
+		width = int(width)
+	if height is not None:
+		height = int(height)
+	if quality is not None:
+		quality = int(quality)
+
+	mainParser.optimizeImages(clfilter=clFilter, timefilter=timeFilter, maxWidth=width, maxHeight=height, jpgQuality=quality, onlyShrink=argspace.shrink_only)
+
+
+def optimizeAndExtractIfEnabled(mainParser, argspace, clFilter, timeFilter):
+	if any(map(lambda x: x is not None, [argspace.image_width, argspace.image_height, argspace.jpg_quality])):
+		optimizeImages(mainParser, argspace, clFilter, timeFilter)
+	if argspace.extract_media is not None:
+		mainParser.extractMedia(argspace.extract_media, clfilter=clFilter, timefilter=timeFilter)
 
 
 def unicode_print(s):
