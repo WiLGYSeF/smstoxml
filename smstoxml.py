@@ -24,10 +24,10 @@ def main(argv):
 	aparser.add_argument("-g", "--filter-number", metavar="NUM", action="append", help="add number to filter")
 	aparser.add_argument("-t", "--filter-time", metavar=("START", "END"), nargs=2, action="append", help="add time range to filter, START/END can be in seconds since epoch or YYYY-MM-DD HH:MM:SS")
 
-	aparser.add_argument("--replace-num-num", metavar="NUM", nargs=2, action="append", help="replace number by number")
-	aparser.add_argument("--replace-num-contact", metavar=("NUM", "NAME"), nargs=2, action="append", help="replace number by contact")
-	aparser.add_argument("--replace-contact-contact", metavar="NAME", nargs=2, action="append", help="replace contact name by contact")
-	aparser.add_argument("--replace-contact-num", metavar=("NAME", "NUM"), nargs=2, action="append", help="replace contact name by number")
+	aparser.add_argument("--replace-num-num", metavar=("SEARCH", "REPLACE"), nargs=2, action="append", help="replace number by number")
+	aparser.add_argument("--replace-num-contact", metavar=("SEARCH", "REPLACE"), nargs=2, action="append", help="replace number by contact")
+	aparser.add_argument("--replace-contact-contact", metavar=("SEARCH", "REPLACE"), nargs=2, action="append", help="replace contact name by contact")
+	aparser.add_argument("--replace-contact-num", metavar=("SEARCH", "REPLACE"), nargs=2, action="append", help="replace contact name by number")
 
 	agroup = aparser.add_mutually_exclusive_group()
 	agroup.add_argument("--remove-filtered", action="store_true", help="remove entries that match the given filters")
@@ -76,6 +76,40 @@ def main(argv):
 
 				for n in nodes:
 					collection.append(n.extract())
+
+
+	contactList = mainParser.getFullContacts()
+	clFilter = ContactListFilter(contactList)
+	timeFilter = TimelineFilter()
+
+	if argspace.filter_contact is not None:
+		for ct in argspace.filter_contact:
+			clFilter.addContact(ct)
+	if argspace.filter_number is not None:
+		for num in argspace.filter_number:
+			clFilter.addNumber(num)
+
+	if argspace.filter_time is not None:
+		for start, end in argspace.filter_time:
+			timeFilter.addTimeRange(start, end)
+
+	if argspace.remove_no_duration and not mainParser.smsXML:
+		mainParser.removeNoDuration(clFilter, timeFilter)
+
+	if argspace.replace_num_num is not None:
+		for n1, n2 in argspace.replace_num_num:
+			mainParser.replaceNumberByNumber(n1, n2)
+	if argspace.replace_num_contact is not None:
+		for ct, num in argspace.replace_num_contact:
+			mainParser.replaceNumberByContact(ct, num)
+	if argspace.replace_contact_contact is not None:
+		for ct1, ct2 in argspace.replace_contact_contact:
+			mainParser.replaceContactByContact(ct1, ct2)
+	if argspace.replace_contact_num is not None:
+		for num, ct in argspace.replace_contact_num:
+			mainParser.replaceContactByNumber(num, ct)
+
+	contactList = mainParser.getFullContacts()
 
 
 if __name__ == "__main__":
