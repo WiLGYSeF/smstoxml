@@ -130,7 +130,7 @@ def main(argv):
 
 	if argspace.statistics:
 		counter = mainParser.count()
-		print(json.dumps(counter, indent=argspace.indent))
+		unicode_print(json.dumps(counter, indent=argspace.indent))
 		exit(0)
 
 	if argspace.list:
@@ -152,6 +152,10 @@ def main(argv):
 	if argspace.strip:
 		mainParser.stripAttrs()
 
+
+def unicode_print(s):
+	sys.stdout.buffer.write(s.encode("utf-8"))
+	print("")
 
 if __name__ == "__main__":
 	main(sys.argv)
