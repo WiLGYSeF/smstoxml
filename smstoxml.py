@@ -14,8 +14,8 @@ import parser
 def main(argv):
 	aparser = argparse.ArgumentParser(description="")
 	agroup = aparser.add_mutually_exclusive_group()
-	agroup.add_argument("-l", "--list", action="store_true", help="list the contacts in the file and exit")
-	agroup.add_argument("--stats", action="store_true", help="display statistics of entries and exit")
+	agroup.add_argument("-l", "--list", action="store_true", help="list the contacts in the file")
+	agroup.add_argument("--stats", action="store_true", help="display statistics of entries")
 
 	agroup = aparser.add_mutually_exclusive_group()
 	agroup.add_argument("--sort-contact", action="store_true", help="sort list output by contact")
@@ -136,7 +136,6 @@ def main(argv):
 	if argspace.stats:
 		counter = mainParser.count()
 		unicode_print(json.dumps(counter, indent=argspace.indent))
-		exit(0)
 
 	if argspace.list:
 		if argspace.sort_contact:
@@ -149,7 +148,6 @@ def main(argv):
 				unicode_print("%s: %s" % (ctname, num))
 			else:
 				unicode_print("%s: %s" % (num, ctname))
-		exit(0)
 
 	if argspace.remove_comments:
 		mainParser.removeComments()
