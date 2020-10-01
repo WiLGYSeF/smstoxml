@@ -376,29 +376,10 @@ class Parser:
 		if not self.smsXML:
 			raise Exception("cannot extract media from call file")
 
-		archive = archiver.Archiver(arname, type=artype)
+		archive = archiver.Archiver(arname, type_=artype)
 		usedNames = set()
-		hasClFilter = clfilter is not None and len(clfilter) != 0
-		hasTimeFilter = timefilter is not None and len(timefilter.timeline) != 0
 
-		for node in self.soup.find_all("part"):
-			mtype = node["ct"]
-			if mtype == "application/smil":
-				continue
-			if "data" not in node.attrs:
-				continue
-
-			mmsparent = node.parent.parent
-			if hasClFilter and not clfilter.hasNumberOrContact(mmsparent["address"], mmsparent["contact_name"]):
-				continue
-			#time is stored in milliseconds since epoch
-			seconds = int(mmsparent["date"]) // 1000
-			if hasTimeFilter and not timefilter.inTimeline(seconds):
-				continue
-
-			if excludeMimetypes is not None and mtype in excludeMimetypes:
-				continue
-
+		for node in self.genMmsMedia(excludeMimetypes, clFilter=clfilter, timeFilter=timefilter):
 			if "name" in node:
 				name = node["name"]
 				if "." in name:
@@ -414,7 +395,9 @@ class Parser:
 					name = "%s_%d%s" % (fname, incr, ext)
 					incr += 1
 			else:
-				ext = mimetype.guessMimetype(mtype)
+				mmsparent = node.parent.parent
+				ext = mimetype.guessMimetype(node["ct"])
+
 				if ext is not None and len(ext) != 0:
 					ext = "." + ext
 				name = "%s-%s%s" % (mmsparent["date"], mmsparent["contact_name"], ext)
@@ -425,8 +408,11 @@ class Parser:
 					incr += 1
 
 			data = base64.b64decode(node.attrs["data"])
-			archive.addFile(name, data)
-			usedNames.add(name)
+			try:
+				archive.addFile(name, data)
+				usedNames.add(name)
+			except Exception as e:
+				traceback.print_exc()
 
 		archive.close()
 
@@ -435,33 +421,53 @@ class Parser:
 		if not self.smsXML:
 			raise Exception("cannot optimize images from call file")
 
-		hasClFilter = clfilter is not None and len(clfilter) != 0
-		hasTimeFilter = timefilter is not None and len(timefilter.timeline) != 0
+		for node in self.genMmsMedia(None, clFilter=clfilter, timeFilter=timefilter):
+			if node["ct"] not in media.imageMimetypes:
+				continue
+
+			try:
+				optimized = media.optimizeImage(
+					base64.b64decode(node.attrs["data"]),
+					media.imageMimetypes[node["ct"]],
+					maxWidth=maxWidth,
+					maxHeight=maxHeight,
+					jpgQuality=jpgQuality,
+					onlyShrink=onlyShrink
+				)
+
+				if optimized:
+					node.attrs["data"] = base64.b64encode(optimized).decode("ascii")
+				if optimized is None:
+					mmse = node.parent.parent
+					print('img: %s "%s" %s: image did not shrink' % (mmse.attrs["address"], mmse.attrs["contact_name"].replace('"', '\\"'), mmse.attrs["readable_date"]), file=sys.stderr)
+			except:
+				pass
+
+
+	def genMmsMedia(self, excludeMimetypes=None,clFilter=None, timeFilter=None):
+		hasClFilter = clFilter is not None and len(clFilter) != 0
+		hasTimeFilter = timeFilter is not None and len(timeFilter.timeline) != 0
 
 		for node in self.soup.find_all("part"):
 			mtype = node["ct"]
 			if mtype == "application/smil":
 				continue
-			if mtype not in media.imageMimetypes:
-				continue
 			if "data" not in node.attrs:
 				continue
 
 			mmsparent = node.parent.parent
-			if hasClFilter and not clfilter.hasNumberOrContact(mmsparent["address"], mmsparent["contact_name"]):
-					continue
+			numbers, contacts = self.splitMmsContacts(mmsparent["address"], mmsparent["contact_name"])
+			if hasClFilter and not any(map(lambda num, ctname: clFilter.hasNumberOrContact(num, ctname), numbers, contacts)):
+				continue
 			#time is stored in milliseconds since epoch
 			seconds = int(mmsparent["date"]) // 1000
 			if hasTimeFilter and not timefilter.inTimeline(seconds):
 				continue
 
-			optimized = media.optimizeImage(base64.b64decode(node.attrs["data"]), media.imageMimetypes[mtype], maxWidth=maxWidth, maxHeight=maxHeight, jpgQuality=jpgQuality, onlyShrink=onlyShrink)
+			if excludeMimetypes is not None and mtype in excludeMimetypes:
+				continue
 
-			if optimized:
-				node.attrs["data"] = base64.b64encode(optimized).decode("ascii")
-			if optimized is None:
-				mmselement = node.parent.parent
-				print('img: %s "%s" %s: image did not shrink' % (mmselement.attrs["address"], mmselement.attrs["contact_name"].replace('"', '\\"'), mmselement.attrs["readable_date"]), file=sys.stderr)
+			yield node
 
 
 	def prettify(self, indent=2):
