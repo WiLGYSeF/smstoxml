@@ -129,6 +129,20 @@ def main(argv):
 	except:
 		argspace.indent = 2
 
+	if any(map(lambda x: x is not None, [argspace.image_width, argspace.image_height, argspace.jpg_quality])):
+		width = argspace.image_width
+		height = argspace.image_height
+		quality = argspace.jpg_quality
+
+		if width is not None:
+			width = int(width)
+		if height is not None:
+			height = int(height)
+		if quality is not None:
+			quality = int(quality)
+
+		mainParser.optimizeImages(clfilter=clFilter, timefilter=timeFilter, maxWidth=width, maxHeight=height, jpgQuality=quality, onlyShrink=argspace.shrink_only)
+
 	if argspace.extract_media is not None:
 		mainParser.extractMedia(argspace.extract_media, clfilter=clFilter, timefilter=timeFilter)
 
