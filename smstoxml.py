@@ -38,9 +38,7 @@ def main(argv):
 	aparser.add_argument("--remove-no-duration", action="store_true", help="remove call entries with no call duration")
 	aparser.add_argument("--remove-comments", action="store_true", help="remove comments from output")
 
-	agroup = aparser.add_mutually_exclusive_group()
-	agroup.add_argument("--revert-escape", action="store_true", help="revert escaped invalid XML")
-	agroup.add_argument("--no-escape", action="store_true", help="do not escape invalid XML") #?
+	aparser.add_argument("--revert-escape", action="store_true", help="revert escaped invalid XML")
 
 	aparser.add_argument("--strip", action="store_true", help="strips non-critical attributes from entries, MAY AFFECT RESTORATION")
 
@@ -155,11 +153,15 @@ def main(argv):
 	if argspace.strip:
 		mainParser.stripAttrs()
 
+	outputBuf = mainParser.prettify(indent=argspace.indent).encode("ascii", errors="xmlcharrefreplace")
+	if argspace.revert_escape:
+		outputBuf = parser.unescapeEscapedAmpersands(outputBuf)
+
 	if argspace.output != "-":
 		with open(argspace.output, "wb") as f:
-			f.write(mainParser.prettify(indent=argspace.indent).encode("ascii", errors="xmlcharrefreplace"))
+			f.write(outputBuf)
 	else:
-		print(mainParser.prettify(indent=argspace.indent).encode("ascii", errors="xmlcharrefreplace").decode("ascii"))
+		print(outputBuf.decode("ascii"))
 
 	if argspace.no_write_optimized_images:
 		optimizeAndExtractIfEnabled(mainParser, argspace, clFilter, timeFilter)
