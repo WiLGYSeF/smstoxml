@@ -146,6 +146,12 @@ def main(argv):
 				unicode_print("%s: %s" % (num, ctname))
 		exit(0)
 
+	if argspace.remove_comments:
+		mainParser.removeComments()
+
+	if argspace.strip:
+		mainParser.stripAttrs()
+
 
 if __name__ == "__main__":
 	main(sys.argv)
