@@ -1,5 +1,9 @@
+import base64
 import bs4
 import re
+
+import archiver
+import mimetype
 
 
 class Parser:
@@ -310,6 +314,65 @@ class Parser:
 			KEEPATTR = set(["contact_name", "date", "duration", "number", "readable_date", "type"])
 			for node in self.soup.find_all("call"):
 				delattrib(node, KEEPATTR)
+
+
+	def extractMedia(self, arname, excludeMimetypes, clfilter=None, timefilter=None):
+		if not self.smsXML:
+			raise Exception("cannot extract media from call file")
+
+		archive = archiver.Archiver(arname)
+		usedNames = set()
+		hasClFilter = clfilter is not None and len(clfilter) != 0
+		hasTimeFilter = timefilter is not None and len(timefilter.timeline) != 0
+
+		for node in self.soup.find_all("part"):
+			mtype = node["ct"]
+			if mtype == "application/smil":
+				continue
+
+			#node["data"] doesnt exist anymore?
+			if "data" not in node.attrs:
+				continue
+
+			mmsparent = node.parent.parent
+			if hasClFilter and not clfilter.hasNumberOrContact(mmsparent["address"], mmsparent["contact_name"]):
+				continue
+			#time is stored in milliseconds since epoch
+			seconds = int(mmsparent["date"]) // 1000
+			if hasTimeFilter and not timefilter.inTimeline(seconds):
+				continue
+
+			if mtype in excludeMimetypes:
+				continue
+
+			if "name" in node:
+				name = node["name"]
+				if "." in name:
+					spl = name.split(".")
+					fname = ".".join(spl[1:])
+					ext = "." + spl[0]
+				else:
+					fname = ""
+					ext = ""
+
+				incr = 1
+				while name in usedNames:
+					name = "%s_%d%s" % (fname, incr, ext)
+					incr += 1
+			else:
+				ext = mimetype.guessMimetype(mtype)
+				name = "%s-%s.%s" % (mmsparent["date"], mmsparent["contact_name"], ext)
+
+				incr = 1
+				while name in usedNames:
+					name = "%s-%s_%d.%s" % (mmsparent["date"], mmsparent["contact_name"], incr, ext)
+					incr += 1
+
+			data = base64.b64decode(node.attrs["data"])
+			archive.addFile(name, data)
+			usedNames.add(name)
+
+		archive.close()
 
 
 	def prettify(self, indent=2, tabs=False):
