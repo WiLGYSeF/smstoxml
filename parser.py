@@ -1,12 +1,10 @@
 from collections import deque
 import base64
 import bs4
-import io
 import re
 
-from PIL import Image
-
 import archiver
+import media
 import mimetype
 
 
@@ -438,18 +436,9 @@ class Parser:
 		archive.close()
 
 
-	def optimizeImages(self, clfilter=None, timefilter=None, maxWidth=None, maxHeight=None, jpgQuality=None, onlyShrink=None):
+	def optimizeImages(self, clfilter=None, timefilter=None, maxWidth=None, maxHeight=None, jpgQuality=None, onlyShrink=False):
 		if not self.smsXML:
 			raise Exception("cannot optimize images from call file")
-
-		mimetypes_dict = {
-			"image/bmp": "bmp",
-			"image/gif": "gif",
-			"image/jpeg": "jpeg",
-			"image/png": "png",
-			"image/svg+xml": "svg",
-			"image/tiff": "tiff"
-		}
 
 		hasClFilter = clfilter is not None and len(clfilter) != 0
 		hasTimeFilter = timefilter is not None and len(timefilter.timeline) != 0
@@ -458,7 +447,7 @@ class Parser:
 			mtype = node["ct"]
 			if mtype == "application/smil":
 				continue
-			if mtype not in mimetypes_dict:
+			if mtype not in media.imageMimetypes:
 				continue
 			if "data" not in node.attrs:
 				continue
@@ -471,41 +460,13 @@ class Parser:
 			if hasTimeFilter and not timefilter.inTimeline(seconds):
 				continue
 
-			sio = io.BytesIO(base64.b64decode(node.attrs["data"]))
-			img = Image.open(sio)
-			changed = False
+			optimized = media.optimizeImage(base64.b64decode(node.attrs["data"]), media.imageMimetypes[mtype], maxWidth=maxWidth, maxHeight=maxHeight, jpgQuality=jpgQuality, onlyShrink=onlyShrink)
 
-			if maxWidth != None or maxHeight != None:
-				if maxWidth == None:
-					maxWidth = img.width
-				if maxHeight == None:
-					maxHeight = img.height
-
-				if maxWidth < img.width or maxHeight < img.height:
-					img.thumbnail( (maxWidth, maxHeight), Image.ANTIALIAS)
-					changed = True
-
-			tmpbuf = io.BytesIO()
-			if mtype == "image/jpeg":
-				if jpgQuality == None:
-					jpgQuality = "keep"
-				else:
-					changed = True
-
-				if changed:
-					img.save(tmpbuf, format=mimetypes_dict[mtype], optimize=True, quality=jpgQuality)
-			else:
-				img.save(tmpbuf, format=mimetypes_dict[mtype], optimize=True)
-				changed = True
-
-			if changed:
-				didShrink = sio.getbuffer().nbytes > tmpbuf.getbuffer().nbytes
-				if onlyShrink and didShrink or not onlyShrink:
-					newdata = base64.b64encode(tmpbuf.getvalue()).decode("ascii")
-					node.attrs["data"] = newdata
-				if not didShrink:
-					mmselement = node.parent.parent
-					print('img: %s "%s" %s: image did not shrink' % (mmselement.attrs["address"], mmselement.attrs["contact_name"].replace('"', '\\"'), mmselement.attrs["readable_date"]), file=sys.stderr)
+			if optimized:
+				node.attrs["data"] = base64.b64encode(optimized).decode("ascii")
+			if optimized is None:
+				mmselement = node.parent.parent
+				print('img: %s "%s" %s: image did not shrink' % (mmselement.attrs["address"], mmselement.attrs["contact_name"].replace('"', '\\"'), mmselement.attrs["readable_date"]), file=sys.stderr)
 
 
 	def prettify(self, indent=2, tabs=False):
