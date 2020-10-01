@@ -120,9 +120,17 @@ def main(argv):
 	if argspace.remove_filtered or argspace.keep_filtered:
 		mainParser.removeByFilter(clFilter, timeFilter, removeFiltered=argspace.remove_filtered, matchesAnyFilter=argspace.match_any)
 
+	try:
+		if argspace.indent == "tab":
+			argspace.indent = "\t"
+		else:
+			argspace.indent = int(argspace.indent)
+	except:
+		argspace.indent = 2
+
 	if argspace.statistics:
 		counter = mainParser.count()
-		print(json.dumps(counter, indent=2))
+		print(json.dumps(counter, indent=argspace.indent))
 		exit(0)
 
 
