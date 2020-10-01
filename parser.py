@@ -1,6 +1,13 @@
 from collections import deque
+import base64
 import bs4
+import io
 import re
+
+from PIL import Image
+
+import archiver
+import mimetype
 
 
 class Parser:
@@ -178,7 +185,7 @@ class Parser:
 
 
 	def replace(self, search, replace, searchType, replaceType, timefilter=None):
-		hasTimeFilter = timefilter is not None and len(timefilter) != 0
+		hasTimeFilter = timefilter is not None and len(timefilter.timeline) != 0
 
 		def modifyContactInfo(num, ctname):
 			numbers, contacts = self.splitMmsContacts(num, ctname)
@@ -329,6 +336,139 @@ class Parser:
 						nodeque.append(c)
 				except:
 					pass
+
+
+	def extractMedia(self, arname, excludeMimetypes, clfilter=None, timefilter=None):
+		if not self.smsXML:
+			raise Exception("cannot extract media from call file")
+
+		archive = archiver.Archiver(arname)
+		usedNames = set()
+		hasClFilter = clfilter is not None and len(clfilter) != 0
+		hasTimeFilter = timefilter is not None and len(timefilter.timeline) != 0
+
+		for node in self.soup.find_all("part"):
+			mtype = node["ct"]
+			if mtype == "application/smil":
+				continue
+
+			#node["data"] doesnt exist anymore?
+			if "data" not in node.attrs:
+				continue
+
+			mmsparent = node.parent.parent
+			if hasClFilter and not clfilter.hasNumberOrContact(mmsparent["address"], mmsparent["contact_name"]):
+				continue
+			#time is stored in milliseconds since epoch
+			seconds = int(mmsparent["date"]) // 1000
+			if hasTimeFilter and not timefilter.inTimeline(seconds):
+				continue
+
+			if mtype in excludeMimetypes:
+				continue
+
+			if "name" in node:
+				name = node["name"]
+				if "." in name:
+					spl = name.split(".")
+					fname = ".".join(spl[1:])
+					ext = "." + spl[0]
+				else:
+					fname = ""
+					ext = ""
+
+				incr = 1
+				while name in usedNames:
+					name = "%s_%d%s" % (fname, incr, ext)
+					incr += 1
+			else:
+				ext = mimetype.guessMimetype(mtype)
+				if ext is not None and len(ext) != 0:
+					ext = "." + ext
+				name = "%s-%s%s" % (mmsparent["date"], mmsparent["contact_name"], ext)
+
+				incr = 1
+				while name in usedNames:
+					name = "%s-%s_%d%s" % (mmsparent["date"], mmsparent["contact_name"], incr, ext)
+					incr += 1
+
+			data = base64.b64decode(node.attrs["data"])
+			archive.addFile(name, data)
+			usedNames.add(name)
+
+		archive.close()
+
+
+	def optimizeImages(self, clfilter=None, timefilter=None, maxWidth=None, maxHeight=None, jpgQuality=None, onlyShrink=None):
+		if not self.smsXML:
+			raise Exception("cannot optimize images from call file")
+
+		mimetypes_dict = {
+			"image/bmp": "bmp",
+			"image/gif": "gif",
+			"image/jpeg": "jpeg",
+			"image/png": "png",
+			"image/svg+xml": "svg",
+			"image/tiff": "tiff"
+		}
+
+		hasClFilter = clfilter is not None and len(clfilter) != 0
+		hasTimeFilter = timefilter is not None and len(timefilter.timeline) != 0
+
+		for node in self.soup.find_all("part"):
+			mtype = node["ct"]
+			if mtype == "application/smil":
+				continue
+			if mtype not in mimetypes_dict:
+				continue
+
+			#node["data"] doesnt exist anymore?
+			if "data" not in node.attrs:
+				continue
+
+			mmsparent = node.parent.parent
+			if hasClFilter and not clfilter.hasNumberOrContact(mmsparent["address"], mmsparent["contact_name"]):
+					continue
+			#time is stored in milliseconds since epoch
+			seconds = int(mmsparent["date"]) // 1000
+			if hasTimeFilter and not timefilter.inTimeline(seconds):
+				continue
+
+			sio = io.BytesIO(base64.b64decode(node.attrs["data"]))
+			img = Image.open(sio)
+			changed = False
+
+			if maxWidth != None or maxHeight != None:
+				if maxWidth == None:
+					maxWidth = img.width
+				if maxHeight == None:
+					maxHeight = img.height
+
+				if maxWidth < img.width or maxHeight < img.height:
+					img.thumbnail( (maxWidth, maxHeight), Image.ANTIALIAS)
+					changed = True
+
+			tmpbuf = io.BytesIO()
+			if mtype == "image/jpeg":
+				if jpgQuality == None:
+					jpgQuality = "keep"
+				else:
+					changed = True
+
+				if changed:
+					img.save(tmpbuf, format=mimetypes_dict[mtype], optimize=True, quality=jpgQuality)
+			else:
+				img.save(tmpbuf, format=mimetypes_dict[mtype], optimize=True)
+				changed = True
+
+			if changed:
+				didShrink = sio.getbuffer().nbytes > tmpbuf.getbuffer().nbytes
+				if onlyShrink and didShrink or not onlyShrink:
+					newdata = base64.b64encode(tmpbuf.getvalue()).decode("ascii")
+					node.attrs["data"] = newdata
+				if not didShrink:
+					mmselement = node.parent.parent
+					print('img: %s "%s" %s: image did not shrink' % (mmselement.attrs["address"], mmselement.attrs["contact_name"].replace('"', '\\"'), mmselement.attrs["readable_date"]), file=sys.stderr)
 
 
 	def prettify(self, indent=2, tabs=False):
