@@ -4,15 +4,20 @@ import zipfile
 
 
 class Archiver:
-	def __init__(self, name, compression=None):
+	def __init__(self, name, type=None, compression=None):
 		self.name = name
+		self.arType = type
 
-		if self.name.endswith(".tgz") or self.name.endswith(".tar.gz"):
+		if self.arType not in ["tar", "tgz", "zip"]:
+			if self.name.endswith(".tgz") or self.name.endswith(".tar.gz"):
+				self.arType = "tgz"
+			else:
+				self.arType = "zip"
+
+		if self.arType == "tgz":
 			self.ar = tarfile.open(self.name, "w:gz")
-			self.arType = "tgz"
 		else:
 			self.ar = zipfile.ZipFile(self.name, "w", compression=zipfile.ZIP_DEFLATED)
-			self.arType = "zip"
 
 
 	def addFile(self, name, data):
