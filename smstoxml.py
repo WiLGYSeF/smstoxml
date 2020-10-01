@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
 
+#requires python3-bs4, python3-pil, python3-lxml
+
+import argparse
 import sys
 
 from contactlistfilter import ContactListFilter
@@ -8,7 +11,49 @@ import parser
 
 
 def main(argv):
-	xmlFile = open(argv[1], "rb")
+	aparser = argparse.ArgumentParser(description="")
+	aparser.add_argument("-l", "--list", action="store_true", help="list the contacts in the file")
+
+	agroup = aparser.add_mutually_exclusive_group()
+	agroup.add_argument("--sort-contact", action="store_true", help="sort list output by contact")
+	agroup.add_argument("--sort-number", action="store_true", help="sort list output by number (default)")
+
+	aparser.add_argument("--statistics", action="store_true", help="display statistics of entries")
+
+	aparser.add_argument("-f", "--filter-contact", metavar="NAME", action="append", help="add contact to filter")
+	aparser.add_argument("-g", "--filter-number", metavar="NUM", action="append", help="add number to filter")
+	aparser.add_argument("-t", "--filter-time", metavar=("START", "END"), nargs=2, action="append", help="add time range to filter, START/END can be in seconds since epoch or YYYY-MM-DD HH:MM:SS")
+
+	aparser.add_argument("--replace-num-num", metavar="NUM", nargs=2, action="append", help="replace number by number")
+	aparser.add_argument("--replace-num-contact", metavar=("NUM", "NAME"), nargs=2, action="append", help="replace number by contact")
+	aparser.add_argument("--replace-contact-contact", metavar="NAME", nargs=2, action="append", help="replace contact name by contact")
+	aparser.add_argument("--replace-contact-num", metavar=("NAME", "NUM"), nargs=2, action="append", help="replace contact name by number")
+
+	agroup = aparser.add_mutually_exclusive_group()
+	agroup.add_argument("--remove-filtered", action="store_true", help="remove entries that match the given filters")
+	agroup.add_argument("--keep-filtered", action="store_true", help="keep entries that match the given filters (default)")
+
+	aparser.add_argument("--remove-no-duration", action="store_true", help="remove call entries with no call duration")
+	aparser.add_argument("--remove-comments", action="store_true", help="remove comments from output")
+
+	agroup = aparser.add_mutually_exclusive_group()
+	agroup.add_argument("--revert-escape", action="store_true", help="revert escaping invalid XML")
+	agroup.add_argument("--no-escape", action="store_true", help="do not escape invalid XML") #?
+
+	aparser.add_argument("--strip", action="store_true", help="strips non-critical attributes from entries, MAY AFFECT RESTORATION")
+
+	aparser.add_argument("--indent", metavar="VALUE", action="store", help="indent entries by VALUE spaces, or 'tab'")
+
+	aparser.add_argument("--extract-media", metavar="FILE", action="store", help="extract media files to FILE archive")
+	aparser.add_argument("--image-width", metavar="VALUE", action="store", help="set maximum image width")
+	aparser.add_argument("--image-height", metavar="VALUE", action="store", help="set maximum image height")
+	aparser.add_argument("--jpg-quality", metavar="VALUE", action="store", help="set jpg image quality")
+	aparser.add_argument("--shrink-only", action="store_true", help="only change media if the newer data is smaller")
+
+	aparser.add_argument("output", metavar="OUTPUT", action="store")
+	aparser.add_argument("inputs", metavar="INPUT", action="store", nargs="+")
+
+	argspace = aparser.parse_args()
 
 	smsParser = parser.Parser(xmlFile.read())
 
