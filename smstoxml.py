@@ -153,6 +153,12 @@ def main(argv):
 	if argspace.strip:
 		mainParser.stripAttrs()
 
+	if argspace.output != "-":
+		with open(argspace.output, "wb") as f:
+			f.write(mainParser.prettify(indent=argspace.indent).encode("ascii", errors="xmlcharrefreplace"))
+	else:
+		print(mainParser.prettify(indent=argspace.indent).encode("ascii", errors="xmlcharrefreplace").decode("ascii"))
+
 
 def unicode_print(s):
 	sys.stdout.buffer.write(s.encode("utf-8"))
