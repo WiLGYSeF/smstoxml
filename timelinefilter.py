@@ -2,12 +2,12 @@ import time
 
 
 class TimelineFilter:
-	def __init__(self):
+	def __init__(self, inclusive=True):
 		self.timeline = []
+		self.inclusive = inclusive
 
 		self.condensed = False
 
-		self.inclusive = True
 
 
 	def addTimeRange(self, start, end, dateformat="%Y-%m-%d %H:%M:%S"):
