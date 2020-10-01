@@ -178,7 +178,7 @@ class Parser:
 				unknownCount += 1
 
 
-	def removeByFilter(self, clfilter, timefilter, removeFiltered=True, matchesAnyFilter=False):
+	def removeByFilter(self, clfilter, timefilter, removeFiltered=True, matchesAnyFilter=False, fullMatch=True):
 		removed = False
 
 		def inFilters(num, ctname, seconds):
@@ -200,12 +200,13 @@ class Parser:
 
 		if self.smsXML:
 			for node in self.soup.find_all(["sms", "mms"]):
-				num = node["address"]
-				ctname = node["contact_name"]
 				#time is stored in milliseconds since epoch
 				seconds = int(node["date"]) // 1000
 
-				if inFilters(num, ctname, seconds):
+				numbers, contacts = self.splitMmsContacts(node["address"], node["contact_name"])
+				bMapped = map(lambda num, ctname: inFilters(num, ctname, seconds), numbers, contacts)
+
+				if fullMatch and all(bMapped) or not fullMatch and any(bMapped):
 					node.decompose()
 					removed = True
 		else:
@@ -229,13 +230,7 @@ class Parser:
 		def modifyContactInfo(num, ctname):
 			numbers, contacts = self.splitMmsContacts(num, ctname)
 			for i in range(len(numbers)):
-				b = False
-				if searchType == "number":
-					b = numbers[i] == search
-				elif searchType == "contact":
-					b = contacts[i] == search
-
-				if b:
+				if (searchType == "number" and numbers[i] == search) or (searchType == "contact" and contacts[i] == search):
 					if replaceType == "number":
 						numbers[i] = replace
 					elif replaceType == "contact":

@@ -33,7 +33,8 @@ def main(argv):
 	agroup = aparser.add_mutually_exclusive_group()
 	agroup.add_argument("--remove-filtered", action="store_true", help="remove entries that match the given filters")
 	agroup.add_argument("--keep-filtered", action="store_true", help="keep entries that match the given filters")
-	aparser.add_argument("--match-any", action="store_true", help="entries will be filtered if either contact/number or time filter matches instead of both matching")
+	aparser.add_argument("--match-any", action="store_true", help="entries will be filtered if either contact/number or time filter matches instead of needing both to match")
+	aparser.add_argument("--partial-match", action="store_true", help="an entry with any numbers/contacts in the filter can match instead of all of them needing to match")
 
 	aparser.add_argument("--remove-no-duration", action="store_true", help="remove call entries with no call duration")
 	aparser.add_argument("--remove-comments", action="store_true", help="remove comments from output")
@@ -111,14 +112,14 @@ def main(argv):
 		for num, ct in argspace.replace_contact_num:
 			mainParser.replaceContactByNumber(num, ct)
 
-	contactList = mainParser.getFullContacts()
-
 	if any(map(lambda x: x is not None, [argspace.filter_number, argspace.filter_contact, argspace.filter_time])):
 		if not argspace.remove_filtered and not argspace.keep_filtered:
 			argspace.keep_filtered = True
 
 	if argspace.remove_filtered or argspace.keep_filtered:
-		mainParser.removeByFilter(clFilter, timeFilter, removeFiltered=argspace.remove_filtered, matchesAnyFilter=argspace.match_any)
+		mainParser.removeByFilter(clFilter, timeFilter, removeFiltered=argspace.remove_filtered, matchesAnyFilter=argspace.match_any, fullMatch=not argspace.partial_match)
+
+	contactList = mainParser.getFullContacts()
 
 	try:
 		if argspace.indent == "tab":
