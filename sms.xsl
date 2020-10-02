@@ -73,6 +73,8 @@
 			<th>Message</th>
 		</tr>
 		<xsl:for-each select="smses/*">
+			<xsl:sort select="@date" />
+
 			<xsl:variable name="ptype">
 				<xsl:choose>
 					<xsl:when test="name() = 'sms'">
