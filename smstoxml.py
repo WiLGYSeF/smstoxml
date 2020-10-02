@@ -21,9 +21,7 @@ def main(argv):
 	aparser.add_argument("-y", "--yaml", action="store_true", help="output statistics as YAML instead of JSON")
 	aparser.add_argument("--no-output", action="store_true", help="do not write output when using --list or --stats, use - as the output file")
 
-	agroup = aparser.add_mutually_exclusive_group()
-	agroup.add_argument("--sort-contact", action="store_true", help="sort list output by contact")
-	agroup.add_argument("--sort-number", action="store_true", help="sort list output by number (default)")
+	aparser.add_argument("--sort-contact", action="store_true", help="sort list output by contact instead of number")
 
 	aparser.add_argument("-d", "--filter-contact-expr", metavar="EXPR", action="append", help="add contact expression to filter")
 	aparser.add_argument("-e", "--filter-number-expr", metavar="EXPR", action="append", help="add number expression to filter")
