@@ -19,7 +19,7 @@
 			max-height: 240px;
 		}
 
-		p {
+		p, span {
 			font-size: 14px;
 		}
 
@@ -35,7 +35,7 @@
 			font-size: 13px;
 			text-align: left;
 
-			padding: 8px 12px;
+			padding: 10px;
 			white-space: pre-wrap;
 		}
 
@@ -51,6 +51,11 @@
 			background-color: #fafabb;
 		}
 
+		.address .receiver, .contact_name .receiver {
+			color: #444444;
+			font-size: 13px;
+		}
+
 		.emoji {
 			font-size: 18px;
 			vertical-align: middle;
@@ -60,15 +65,12 @@
 			min-width: 300px;
 			width: 500px;
 		}
-
-		.mms-sender {
-			display: none;
-		}
 	</style>
 </head>
 <body>
 	<h1>Messages</h1>
 	<p>Texts shown: <span id="textsShown">0</span></p>
+
 	<table id="entry-table">
 		<tr>
 			<th>Type</th>
@@ -99,10 +101,27 @@
 				</xsl:choose>
 			</xsl:variable>
 
-			<tr data-address="{@address}" data-contact_name="{@contact_name}" data-type="{$typeStr}">
+			<xsl:variable name="sender">
+				<xsl:choose>
+					<xsl:when test="name() = 'sms'">
+						<xsl:if test="$typeStr = 'Recv'">
+							<xsl:value-of select="@address"/>
+						</xsl:if>
+					</xsl:when>
+					<xsl:otherwise>
+						<xsl:for-each select="addrs/addr">
+							<xsl:if test="@type = '137'">
+								<xsl:value-of select="@address"/>
+							</xsl:if>
+						</xsl:for-each>
+					</xsl:otherwise>
+				</xsl:choose>
+			</xsl:variable>
+
+			<tr data-address="{@address}" data-contact_name="{@contact_name}" data-sender="{$sender}" data-type="{$typeStr}">
 				<td><xsl:value-of select="$typeStr"/></td>
-				<td><xsl:value-of select="@address"/></td>
-				<td><xsl:value-of select="@contact_name"/></td>
+				<td class="address"><xsl:value-of select="@address"/></td>
+				<td class="contact_name"><xsl:value-of select="@contact_name"/></td>
 				<td><xsl:value-of select="@readable_date"/></td>
 				<td class="message">
 					<xsl:choose>
@@ -156,6 +175,38 @@
 			return contactList;
 		}
 
+		function updateTable(tbl)
+		{
+			for (let i = 1; i < tbl.rows.length; i++)
+			{
+				let row = tbl.rows[i];
+				let address = row.getElementsByClassName("address")[0];
+				let contact_name = row.getElementsByClassName("contact_name")[0];
+
+				let numbers = address.innerHTML.split("~");
+				let contacts = contact_name.innerHTML.split(", ");
+
+				if(numbers.length > 1)
+				{
+					for (let n = 0; n < numbers.length; n++)
+					{
+						if(numbers[n] == row.dataset.sender || numbers[n].endsWith(row.dataset.sender))
+						{
+							numbers[n] = `<b>${numbers[n]}</b>`;
+							contacts[n] = `<b>${contacts[n]}</b>`;
+						}else
+						{
+							numbers[n] = `<span class="receiver">${numbers[n]}</span>`;
+							contacts[n] = `<span class="receiver">${contacts[n]}</span>`;
+						}
+					}
+				}
+
+				address.innerHTML = numbers.join("\n");
+				contact_name.innerHTML = contacts.join("\n");
+			}
+		}
+
 		function updateCount(tbl)
 		{
 			document.getElementById("textsShown").innerHTML = tbl.rows.length - 1;
@@ -163,6 +214,7 @@
 
 		let contactList = getContactList(entryTable);
 
+		updateTable(entryTable);
 		updateCount(entryTable);
 	]]>
 	</script>
