@@ -1,178 +1,235 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform" xmlns:msxsl="urn:schemas-microsoft-com:xslt" xmlns:user="http://android.riteshsahu.com">
 <xsl:template match="/">
-	<html>
-	<head>
-		<style>
-			body {
-				color: #000000;
-				font-size: 13px;
-				font-family: arial, sans-serif;
-			}
+<html>
+<head>
+	<style>
+		body {
+			font-family: arial,sans-serif;
+		}
 
-			table {
-				border-collapse: collapse;
-				border-width: 0;
-				empty-cells: show;
+		p, span {
+			font-size: 14px;
+		}
 
-				font-size: 1em;
-				margin: 0 0 1em;
-			}
+		table {
+			border-collapse: collapse;
+			border-width: 0;
 
-			td, th {
-				background-color: inherit;
-				border: 1px solid #ccc;
+			empty-cells: show;
+		}
 
-				padding: 6px 12px;
-				text-align: left;
-				vertical-align: top;
-			}
+		td, th {
+			border: 1px solid #ccc;
+			font-size: 13px;
+			text-align: left;
 
-			th {
-				background-color: #dee8f1;
-			}
-		</style>
-	</head>
-	<body>
-		<h2>Phone calls</h2>
-		<p>Calls Shown: <span id="callsshown">0</span></p>
+			padding: 10px;
+			white-space: pre-wrap;
+		}
 
-		<table id="calls">
-			<tr>
-				<th>Type</th>
-				<th>Number</th>
-				<th>Contact</th>
-				<th>Date</th>
-				<th>Duration</th>
+		th {
+			background-color: #86bbf0;
+		}
+
+		tr[data-type='Outgoing'] {
+			background-color: #b0ffb0;
+		}
+
+		tr[data-type='Missed'] {
+			background-color: #c0c0ff;
+		}
+
+		tr[data-type='Voicemail'] {
+			background-color: #c0c0ff;
+		}
+
+		tr[data-type='Rejected'] {
+			background-color: #ffb0b0;
+		}
+
+		tr[data-type='Refused List'] {
+			background-color: #ffb0b0;
+		}
+
+		.duration {
+			text-align: right;
+		}
+	</style>
+</head>
+<body>
+	<h1>Phone Calls</h1>
+
+	<span>Contacts: </span>
+	<select id="contacts">
+		<option text="All Contacts"></option>
+	</select>
+
+	<p>Calls Shown: <span id="callsShown">0</span></p>
+
+	<table id="calls">
+		<tr>
+			<th>Type</th>
+			<th>Number</th>
+			<th>Contact</th>
+			<th>Date</th>
+			<th>Duration</th>
+		</tr>
+		<xsl:for-each select="calls/call">
+			<xsl:sort select="date" />
+
+			<xsl:variable name="typeStr">
+				<xsl:choose>
+					<xsl:when test="@type = 1">Incoming</xsl:when>
+					<xsl:when test="@type = 2">Outgoing</xsl:when>
+					<xsl:when test="@type = 3">Missed</xsl:when>
+					<xsl:when test="@type = 4">Voicemail</xsl:when>
+					<xsl:when test="@type = 5">Rejected</xsl:when>
+					<xsl:when test="@type = 6">Refused List</xsl:when>
+					<xsl:otherwise>
+						<xsl:value-of select="@type"/>Unknown
+					</xsl:otherwise>
+				</xsl:choose>
+			</xsl:variable>
+
+			<tr data-contact_name="{@contact_name}" data-duration="{@duration}" data-number="{@number}" data-timestamp="{@date}" data-type="{$typeStr}">
+				<td>
+					<xsl:value-of select="$typeStr"/>
+				</td>
+				<td class="number"><xsl:value-of select="@number"/></td>
+				<td><xsl:value-of select="@contact_name"/></td>
+				<td><xsl:value-of select="@readable_date"/></td>
+				<td class="duration"><xsl:value-of select="@duration"/></td>
 			</tr>
-			<xsl:for-each select="calls/call">
-				<tr>
-					<td>
-						<xsl:choose>
-							<xsl:when test="@type = 1">
-								Incoming
-							</xsl:when>
-							<xsl:when test="@type = 2">
-								Outgoing
-							</xsl:when>
-							<xsl:when test="@type = 3">
-								Missed
-							</xsl:when>
-							<xsl:when test="@type = 4">
-								Voicemail
-							</xsl:when>
-							<xsl:when test="@type = 5">
-								Rejected
-							</xsl:when>
-							<xsl:when test="@type = 6">
-								Refused List
-							</xsl:when>
+		</xsl:for-each>
+	</table>
 
-							<xsl:otherwise>
-								<xsl:value-of select="@type"/>Unknown
-							</xsl:otherwise>
-						</xsl:choose>
-					</td>
-					<td><xsl:value-of select="@number"/></td>
-					<td><xsl:value-of select="@contact_name"/></td>
-					<td><xsl:value-of select="@readable_date"/></td>
-					<td class="date" style="display: none"><xsl:value-of select="@date"/><br/></td>
-					<td><xsl:value-of select="@duration"/></td>
-				</tr>
-			</xsl:for-each>
-		</table>
+	<script>
+	<![CDATA[
+		let callsTable = document.getElementById("calls");
+		let contactsSelect = document.getElementById("contacts");
 
-		<script>
-		<![CDATA[
-			var Cols = {
-				TYPE: 0,
-				NUMBER: 1,
-				CONTACT: 2,
-				DATE: 3,
-				TIMESTAMP: 4,
-				DURATION: 5,
-			};
+		function getContactList(tbl)
+		{
+			let contactList = {};
 
-			function prepareTable(tbl)
+			for (let i = 1; i < tbl.rows.length; i++)
 			{
-				let rows = Array.from(tbl.rows);
-				rows.splice(0, 1);
+				let row = tbl.rows[i];
+				contactList[row.dataset.number] = row.dataset.contact_name;
+			}
 
-				rows.sort(function(a, b){
-					//sort by hidden date value
-					a = parseInt(a.getElementsByClassName("date")[0].innerHTML, 10);
-					b = parseInt(b.getElementsByClassName("date")[0].innerHTML, 10);
+			return contactList;
+		}
 
-					if(a < b)
-						return -1;
-					if(a > b)
-						return 1;
-					return 0;
-				});
+		function filterTable(tbl, address)
+		{
+			let visible = 0;
+			for (let i = 1; i < tbl.rows.length; i++)
+			{
+				let row = tbl.rows[i];
 
-				let tbody = tbl.getElementsByTagName("tbody")[0];
-
-				//remove all but header, and create rows back as sorted
-				while(tbody.children.length > 1)
-					tbody.removeChild(tbody.children[1]);
-				for (let i = 0; i < rows.length; i++)
-					tbody.appendChild(rows[i]);
-
-				for (let i = 1, len = tbl.rows.length; i < len; i++)
+				if(address === undefined || row.dataset.number == address)
 				{
-					let row = tbl.rows[i];
-					let status = row.cells[Cols.TYPE].textContent.trim();
-
-					switch(status)
-					{
-						case "Incoming":
-							break;
-						case "Outgoing":
-							row.style.backgroundColor = "#b0ffb0";
-							break;
-						case "Missed":
-							row.style.backgroundColor = "#c0c0ff";
-							break;
-						case "Voicemail":
-							row.style.backgroundColor = "#c0c0ff";
-							break;
-						case "Rejected":
-							row.style.backgroundColor = "#ffb0b0";
-							break;
-						case "Refused List":
-							row.style.backgroundColor = "#ffb0b0";
-							break;
-					}
-
-					let time = parseInt(row.cells[Cols.DURATION].textContent.trim());
-
-					let hour = Math.floor(time / 3600);
-					time %= 3600;
-					let min = Math.floor(time / 60);
-					time %= 60;
-
-					if(hour > 0)
-					{
-						row.cells[Cols.DURATION].textContent = `${hour}h ${min}m ${time}s`;
-					}else
-					if(min > 0)
-					{
-						row.cells[Cols.DURATION].textContent = `${min}m ${time}s`;
-					}else
-					{
-						row.cells[Cols.DURATION].textContent = `${time}s`;
-					}
+					row.style.display = "";
+					visible++;
+				}else
+				{
+					row.style.display = "none";
 				}
 			}
 
-			var calls = document.getElementById("calls");
+			return visible;
+		}
 
-			prepareTable(calls);
+		function updateTable(tbl)
+		{
+			function ps(x)
+			{
+				return x.toString().padStart(2, "0");
+			}
 
-			document.getElementById("callsshown").innerHTML = calls.rows.length - 1;
-		]]>
-		</script>
-	</body>
-	</html>
+			for (let i = 1; i < tbl.rows.length; i++)
+			{
+				let row = tbl.rows[i];
+				let duration = row.getElementsByClassName("duration")[0];
+
+				let time = parseInt(row.dataset.duration);
+				let timestr = "";
+
+				if(time > 3600)
+				{
+					timestr += `${ps((time / 3600) >> 0)}h`;
+					time %= 3600;
+				}
+
+				if(time > 60 || timestr.length != 0)
+				{
+					timestr += ` ${ps((time / 60) >> 0)}m`;
+					time %= 60;
+				}
+
+				if(time >= 0 || timestr.length != 0)
+				{
+					timestr += ` ${ps(time)}s`;
+				}
+
+				timestr = timestr.trim();
+				if(timestr[0] == "0")
+					timestr = timestr.substring(1);
+
+				duration.innerHTML = timestr;
+			}
+		}
+
+		function updateContacts(contactList)
+		{
+			while(contactsSelect.firstChild)
+				contactsSelect.removeChild(contactsSelect.lastChild);
+
+			let option = document.createElement("option");
+			option.text = "All Contacts";
+			contactsSelect.add(option);
+
+			for (let num in contactList)
+			{
+				option = document.createElement("option");
+				option.dataset.address = num;
+				option.dataset.contact_name = contactList[num];
+				option.text = `${num}: ${contactList[num]}`;
+				contactsSelect.add(option);
+			}
+		}
+
+		function updateCount(tbl, c)
+		{
+			if(c === undefined)
+			{
+				c = 0;
+				for (let i = 1; i < tbl.rows.length; i++)
+				{
+					if(tbl.rows[i].style.display == "")
+						c++;
+				}
+			}
+
+			document.getElementById("callsShown").innerHTML = c;
+		}
+
+		contactsSelect.addEventListener("change", function(e){
+			let option = e.target.selectedOptions[0];
+
+			updateCount(callsTable, filterTable(callsTable, option.dataset.address));
+		});
+
+		let contactList = getContactList(callsTable);
+
+		updateTable(callsTable);
+		updateContacts(contactList);
+		updateCount(callsTable, undefined);
+	]]>
+	</script>
+</body>
+</html>
 </xsl:template>
 </xsl:stylesheet>
