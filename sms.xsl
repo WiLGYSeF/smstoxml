@@ -1,11 +1,5 @@
 <?xml version="1.0" encoding="ISO-8859-1"?>
-<!--
-	~ Copyright (c) 2010 - 2016 Carbonite. All Rights Reserved.
-	-->
-
-<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
-								xmlns:msxsl="urn:schemas-microsoft-com:xslt"
-								xmlns:user="http://android.riteshsahu.com">
+<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform" xmlns:msxsl="urn:schemas-microsoft-com:xslt" xmlns:user="http://android.riteshsahu.com">
 <xsl:template match="/">
 <html>
 <head>
@@ -54,11 +48,6 @@
 		.address .receiver, .contact_name .receiver {
 			color: #444444;
 			font-size: 13px;
-		}
-
-		.emoji {
-			font-size: 18px;
-			vertical-align: middle;
 		}
 
 		.message {
