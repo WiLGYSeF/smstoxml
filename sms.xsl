@@ -48,11 +48,11 @@
 		</tr>
 		<xsl:for-each select="smses/*">
 			<tr>
-				<xsl:choose>
-					<xsl:when test="name() = 'sms'">
-						<td>
+				<td>
+					<xsl:choose>
+						<xsl:when test="name() = 'sms'">
 							<xsl:if test="@type = 1">
-								Received
+								Recv
 							</xsl:if>
 							<xsl:if test="@type = 2">
 								Sent
@@ -60,12 +60,10 @@
 							<xsl:if test="@type = 3">
 								Draft
 							</xsl:if>
-						</td>
-					</xsl:when>
-					<xsl:otherwise>
-						<td>
+						</xsl:when>
+						<xsl:otherwise>
 							<xsl:if test="@msg_box = 1">
-								Received
+								Recv
 							</xsl:if>
 							<xsl:if test="@msg_box = 2">
 								Sent
@@ -73,9 +71,9 @@
 							<xsl:if test="@msg_box = 3">
 								Draft
 							</xsl:if>
-						</td>
-					</xsl:otherwise>
-				</xsl:choose>
+						</xsl:otherwise>
+					</xsl:choose>
+				</td>
 
 				<td><xsl:value-of select="@address"/></td>
 				<td><xsl:value-of select="@contact_name"/></td>
