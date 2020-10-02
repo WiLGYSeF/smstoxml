@@ -473,14 +473,17 @@ class Parser:
 				lines.insert(1, '<?xml-stylesheet type="text/xsl" href="calls.xsl"?>')
 
 		if indent != 1:
-			wspace = re.compile('^(\s+)', re.MULTILINE)
-			if indent == "\t":
-				output = wspace.sub("\t", "\n".join(lines))
-			else:
-				output = wspace.sub(" " * indent, "\n".join(lines))
-		else:
-			output = "\n".join(lines)
-		return output
+			for i in range(len(lines)):
+				line = lines[i]
+				c = 0
+
+				while c < len(line):
+					if line[c] != " ":
+						break
+					c += 1
+				lines[i] = ("\t" * c if indent == "\t" else " " * indent * c) + line[c:]
+
+		return "\n".join(lines)
 
 
 	def hasStylesheet(self):
