@@ -73,33 +73,27 @@
 			<th>Message</th>
 		</tr>
 		<xsl:for-each select="smses/*">
-			<tr>
-				<td>
-					<xsl:variable name="ptype">
-						<xsl:choose>
-							<xsl:when test="name() = 'sms'">
-								<xsl:value-of select="@type"/>
-							</xsl:when>
-							<xsl:otherwise>
-								<xsl:value-of select="@msg_box"/>
-							</xsl:otherwise>
-						</xsl:choose>
-					</xsl:variable>
+			<xsl:variable name="ptype">
+				<xsl:choose>
+					<xsl:when test="name() = 'sms'">
+						<xsl:value-of select="@type"/>
+					</xsl:when>
+					<xsl:otherwise>
+						<xsl:value-of select="@msg_box"/>
+					</xsl:otherwise>
+				</xsl:choose>
+			</xsl:variable>
+			<xsl:variable name="typeStr">
+				<xsl:choose>
+					<xsl:when test="$ptype = 1">Recv</xsl:when>
+					<xsl:when test="$ptype = 2">Sent</xsl:when>
+					<xsl:when test="$ptype = 3">Draft</xsl:when>
+					<xsl:otherwise></xsl:otherwise>
+				</xsl:choose>
+			</xsl:variable>
 
-					<xsl:choose>
-						<xsl:when test="$ptype = 1">
-							Recv
-						</xsl:when>
-						<xsl:when test="$ptype = 2">
-							Sent
-						</xsl:when>
-						<xsl:when test="$ptype = 3">
-							Draft
-						</xsl:when>
-						<xsl:otherwise></xsl:otherwise>
-					</xsl:choose>
-				</td>
-
+			<tr data-type="{$typeStr}">
+				<td><xsl:value-of select="$typeStr"/></td>
 				<td><xsl:value-of select="@address"/></td>
 				<td><xsl:value-of select="@contact_name"/></td>
 				<td><xsl:value-of select="@readable_date"/></td>
