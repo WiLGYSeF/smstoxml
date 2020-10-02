@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+#requires python3-bs4, python3-pil, python3-lxml, pyyaml
 
 import argparse
 import json

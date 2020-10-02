@@ -12,6 +12,7 @@ imageMimetypes = {
 	"image/tiff": "tiff"
 }
 
+
 def optimizeImage(data, format, maxWidth=None, maxHeight=None, jpgQuality=None, onlyShrink=False):
 	sio = io.BytesIO(data)
 	img = Image.open(sio)
