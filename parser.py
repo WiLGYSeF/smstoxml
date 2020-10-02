@@ -206,9 +206,9 @@ class Parser:
 				seconds = int(node["date"]) // 1000
 
 				numbers, contacts = self.splitMmsContacts(node["address"], node["contact_name"])
-				bMapped = map(lambda num, ctname: inFilters(num, ctname, seconds), numbers, contacts)
+				bMapped = list(map(lambda num, ctname: inFilters(num, ctname, seconds), numbers, contacts))
 
-				if fullMatch and all(bMapped) or not fullMatch and any(bMapped):
+				if (fullMatch and all(bMapped)) or (not fullMatch and any(bMapped)):
 					node.decompose()
 					removed = True
 		else:
