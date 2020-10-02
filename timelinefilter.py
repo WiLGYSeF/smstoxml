@@ -2,12 +2,15 @@ import time
 
 
 class TimelineFilter:
+	RANGE_BEGIN = 0
+	RANGE_END = 1
+
+
 	def __init__(self, inclusive=True):
 		self.timeline = []
 		self.inclusive = inclusive
 
 		self.condensed = False
-
 
 
 	def addTimeRange(self, start, end, dateformat="%Y-%m-%d %H:%M:%S"):
@@ -24,7 +27,7 @@ class TimelineFilter:
 		endTime = convertToTime(end)
 
 		if startTime > endTime:
-			raise Exception("filter time " + str(start) + " and " + str(end) + " is in wrong order")
+			raise Exception("Start time of range is greater than end time: [%d, %d]" % (start, end))
 
 		def cmpfunc(x, y):
 			if x[0] < y[0]:
@@ -39,8 +42,8 @@ class TimelineFilter:
 			return 0
 
 		# 0 for start time, 1 for end time
-		insertarr(self.timeline, ( startTime, 0 ), cmpfunc, unique=True)
-		insertarr(self.timeline, ( endTime, 1 ), cmpfunc, unique=True)
+		insertarr(self.timeline, ( startTime, TimelineFilter.RANGE_BEGIN ), cmpfunc, unique=True)
+		insertarr(self.timeline, ( endTime, TimelineFilter.RANGE_END ), cmpfunc, unique=True)
 		self.condensed = False
 
 
@@ -49,10 +52,10 @@ class TimelineFilter:
 		idx = 0
 
 		def traverse(idx):
-			while idx < len(self.timeline) and self.timeline[idx][1] == 0:
+			while idx < len(self.timeline) and self.timeline[idx][1] == TimelineFilter.RANGE_BEGIN:
 				idx += 1
 
-			while idx < len(self.timeline) and self.timeline[idx][1] == 1:
+			while idx < len(self.timeline) and self.timeline[idx][1] == TimelineFilter.RANGE_END:
 				end = self.timeline[idx][0]
 				idx += 1
 
@@ -72,8 +75,8 @@ class TimelineFilter:
 			idx = traverse(idx + 1)
 			end = self.timeline[idx - 1][0]
 
-			condensedTimeline.append( ( start, 0 ) )
-			condensedTimeline.append( ( end, 1 ) )
+			condensedTimeline.append( ( start, TimelineFilter.RANGE_BEGIN ) )
+			condensedTimeline.append( ( end, TimelineFilter.RANGE_END ) )
 
 		self.timeline = condensedTimeline
 		self.condensed = True
