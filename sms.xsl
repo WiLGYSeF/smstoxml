@@ -49,29 +49,28 @@
 		<xsl:for-each select="smses/*">
 			<tr>
 				<td>
+					<xsl:variable name="ptype">
+						<xsl:choose>
+							<xsl:when test="name() = 'sms'">
+								<xsl:value-of select="@type"/>
+							</xsl:when>
+							<xsl:otherwise>
+								<xsl:value-of select="@msg_box"/>
+							</xsl:otherwise>
+						</xsl:choose>
+					</xsl:variable>
+
 					<xsl:choose>
-						<xsl:when test="name() = 'sms'">
-							<xsl:if test="@type = 1">
-								Recv
-							</xsl:if>
-							<xsl:if test="@type = 2">
-								Sent
-							</xsl:if>
-							<xsl:if test="@type = 3">
-								Draft
-							</xsl:if>
+						<xsl:when test="$ptype = 1">
+							Recv
 						</xsl:when>
-						<xsl:otherwise>
-							<xsl:if test="@msg_box = 1">
-								Recv
-							</xsl:if>
-							<xsl:if test="@msg_box = 2">
-								Sent
-							</xsl:if>
-							<xsl:if test="@msg_box = 3">
-								Draft
-							</xsl:if>
-						</xsl:otherwise>
+						<xsl:when test="$ptype = 2">
+							Sent
+						</xsl:when>
+						<xsl:when test="$ptype = 3">
+							Draft
+						</xsl:when>
+						<xsl:otherwise></xsl:otherwise>
 					</xsl:choose>
 				</td>
 
