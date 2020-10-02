@@ -172,31 +172,17 @@ class Parser:
 	def removeByFilter(self, clfilter, timefilter, removeFiltered=True, matchesAnyFilter=False, fullMatch=True):
 		removed = False
 
-		def inFilters(num, ctname, seconds):
-			hasClFilter = clfilter is not None and not clfilter.isEmpty()
-			hasTimeFilter = timefilter is not None and not timefilter.isEmpty()
-			b = False
-
-			if matchesAnyFilter:
-				b = (hasClFilter and clfilter.hasNumberOrContact(num, ctname)) or (hasTimeFilter and timefilter.inTimeline(seconds))
-			else:
-				b = False
-				if hasClFilter:
-					b = clfilter.hasNumberOrContact(num, ctname)
-				if hasTimeFilter:
-					if not hasClFilter:
-						b = True
-					b = b and timefilter.inTimeline(seconds)
-
-			return b if removeFiltered else not b
-
 		if self.smsXML:
 			for node in self.soup.find_all(["sms", "mms"]):
 				#time is stored in milliseconds since epoch
 				seconds = int(node["date"]) // 1000
 
 				numbers, contacts = self.splitMmsContacts(node["address"], node["contact_name"])
-				bMapped = list(map(lambda num, ctname: inFilters(num, ctname, seconds), numbers, contacts))
+				bMapped = list(map(
+					lambda num, ctname: self.inFilters(clfilter, timefilter, num, ctname, seconds, removeFiltered=removeFiltered, matchesAnyFilter=matchesAnyFilter),
+					numbers,
+					contacts
+				))
 
 				if (fullMatch and all(bMapped)) or (not fullMatch and any(bMapped)):
 					node.decompose()
@@ -208,7 +194,7 @@ class Parser:
 				#time is stored in milliseconds since epoch
 				seconds = int(call["date"]) // 1000
 
-				if inFilters(num, ctname, seconds):
+				if self.inFilters(clfilter, timefilter, num, ctname, seconds, removeFiltered=removeFiltered, matchesAnyFilter=matchesAnyFilter):
 					call.decompose()
 					removed = True
 
@@ -269,21 +255,17 @@ class Parser:
 		self.replace(searchNum, replaceContact, "number", "contact", timefilter)
 
 
-	def removeNoDuration(self, clfilter, timefilter):
+	def removeNoDuration(self, clfilter, timefilter, removeFiltered=True, matchesAnyFilter=False):
 		if self.smsXML:
 			raise Exception("cannot remove no-duration calls from sms file")
 
 		removed = False
 
-		def inFilters(num, ctname, seconds):
-			b = (clfilter is not None and clfilter.hasNumberOrContact(num, ctname)) or (timefilter is not None and timefilter.inTimeline(seconds))
-			return b if doRemove else not b
-
 		for call in self.soup.find_all("call"):
 			#time is stored in milliseconds since epoch
 			seconds = int(call["date"]) // 1000
 
-			if inFilters(call["number"], call["contact_name"], seconds):
+			if self.inFilters(clfilter, timefilter, call["number"], call["contact_name"], seconds, removeFiltered=removeFiltered, matchesAnyFilter=matchesAnyFilter):
 				continue
 
 			if call["duration"] == "0":
@@ -362,6 +344,25 @@ class Parser:
 						nodeque.append(c)
 				except:
 					pass
+
+
+	def inFilters(self, clFilter, timeFilter, num, ctname, seconds, removeFiltered=True, matchesAnyFilter=False):
+		hasClFilter = clFilter is not None and not clFilter.isEmpty()
+		hasTimeFilter = timeFilter is not None and not timeFilter.isEmpty()
+		b = False
+
+		if matchesAnyFilter:
+			b = (hasClFilter and clFilter.hasNumberOrContact(num, ctname)) or (hasTimeFilter and timeFilter.inTimeline(seconds))
+		else:
+			b = False
+			if hasClFilter:
+				b = clFilter.hasNumberOrContact(num, ctname)
+			if hasTimeFilter:
+				if not hasClFilter:
+					b = True
+				b = b and timeFilter.inTimeline(seconds)
+
+		return b if removeFiltered else not b
 
 
 	def extractMedia(self, arname, artype=None, excludeMimetypes=None, clfilter=None, timefilter=None):
