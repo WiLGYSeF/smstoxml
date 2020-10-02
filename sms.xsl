@@ -94,7 +94,7 @@
 				</xsl:choose>
 			</xsl:variable>
 
-			<tr data-type="{$typeStr}">
+			<tr data-address="{@address}" data-contact_name="{@contact_name}" data-type="{$typeStr}">
 				<td><xsl:value-of select="$typeStr"/></td>
 				<td><xsl:value-of select="@address"/></td>
 				<td><xsl:value-of select="@contact_name"/></td>
