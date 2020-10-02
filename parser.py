@@ -147,7 +147,7 @@ class Parser:
 			numberlist = numbers.split("~")
 			contactlist = contacts.split(", ")
 
-			while len(numberlist) >= len(contactlist):
+			while len(numberlist) > len(contactlist):
 				contactlist.append("(Unknown)")
 		else:
 			numberlist = [numbers]
