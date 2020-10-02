@@ -69,6 +69,12 @@
 </head>
 <body>
 	<h1>Messages</h1>
+
+	<span>Contacts: </span>
+	<select id="contacts">
+		<option text="All Contacts"></option>
+	</select>
+
 	<p>Texts shown: <span id="textsShown">0</span></p>
 
 	<table id="entry-table">
@@ -161,6 +167,7 @@
 		"use strict";
 
 		let entryTable = document.getElementById("entry-table");
+		let contactsSelect = document.getElementById("contacts");
 
 		function getContactList(tbl)
 		{
@@ -173,6 +180,26 @@
 			}
 
 			return contactList;
+		}
+
+		function filterTable(tbl, address)
+		{
+			let visible = 0;
+			for (let i = 1; i < tbl.rows.length; i++)
+			{
+				let row = tbl.rows[i];
+
+				if(address === undefined || row.dataset.address == address)
+				{
+					row.style.display = "";
+					visible++;
+				}else
+				{
+					row.style.display = "none";
+				}
+			}
+
+			return visible;
 		}
 
 		function updateTable(tbl)
@@ -207,15 +234,51 @@
 			}
 		}
 
-		function updateCount(tbl)
+		function updateContacts(contactList)
 		{
-			document.getElementById("textsShown").innerHTML = tbl.rows.length - 1;
+			while(contactsSelect.firstChild)
+				contactsSelect.removeChild(contactsSelect.lastChild);
+
+			let option = document.createElement("option");
+			option.text = "All Contacts";
+			contactsSelect.add(option);
+
+			for (let num in contactList)
+			{
+				option = document.createElement("option");
+				option.dataset.address = num;
+				option.dataset.contact_name = contactList[num];
+				option.text = `${num.split("~").join(", ")}: ${contactList[num]}`;
+				contactsSelect.add(option);
+			}
 		}
+
+		function updateCount(tbl, c)
+		{
+			if(c === undefined)
+			{
+				c = 0;
+				for (let i = 1; i < tbl.rows.length; i++)
+				{
+					if(tbl.rows[i].style.display == "")
+						c++;
+				}
+			}
+
+			document.getElementById("textsShown").innerHTML = c;
+		}
+
+		contactsSelect.addEventListener("change", function(e){
+			let option = e.target.selectedOptions[0];
+
+			updateCount(entryTable, filterTable(entryTable, option.dataset.address));
+		});
 
 		let contactList = getContactList(entryTable);
 
 		updateTable(entryTable);
-		updateCount(entryTable);
+		updateContacts(contactList);
+		updateCount(entryTable, undefined);
 	]]>
 	</script>
 </body>
