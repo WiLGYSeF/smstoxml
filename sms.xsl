@@ -140,11 +140,28 @@
 	<script>
 	<![CDATA[
 		"use strict";
-+
+
+		let entryTable = document.getElementById("entry-table");
+
+		function getContactList(tbl)
+		{
+			let contactList = {};
+
+			for (let i = 1; i < tbl.rows.length; i++)
+			{
+				let row = tbl.rows[i];
+				contactList[row.dataset.address] = row.dataset.contact_name;
+			}
+
+			return contactList;
+		}
+
 		function updateCount(tbl)
 		{
 			document.getElementById("textsShown").innerHTML = tbl.rows.length - 1;
 		}
+
+		let contactList = getContactList(entryTable);
 
 		updateCount(entryTable);
 	]]>
