@@ -183,13 +183,14 @@ class Parser:
 		removed = False
 
 		def inFilters(num, ctname, seconds):
-			hasClFilter = clfilter is not None and len(clfilter) != 0
-			hasTimeFilter = timefilter is not None and len(timefilter.timeline) != 0
+			hasClFilter = clfilter is not None and not clfilter.isEmpty()
+			hasTimeFilter = timefilter is not None and not timefilter.isEmpty()
 			b = False
 
 			if matchesAnyFilter:
 				b = (hasClFilter and clfilter.hasNumberOrContact(num, ctname)) or (hasTimeFilter and timefilter.inTimeline(seconds))
 			else:
+				b = False
 				if hasClFilter:
 					b = clfilter.hasNumberOrContact(num, ctname)
 				if hasTimeFilter:
@@ -226,7 +227,7 @@ class Parser:
 
 
 	def replace(self, search, replace, searchType, replaceType, timefilter=None):
-		hasTimeFilter = timefilter is not None and len(timefilter.timeline) != 0
+		hasTimeFilter = timefilter is not None and not timefilter.isEmpty()
 
 		def modifyContactInfo(num, ctname):
 			numbers, contacts = self.splitMmsContacts(num, ctname)
@@ -446,8 +447,8 @@ class Parser:
 
 
 	def genMmsMedia(self, excludeMimetypes=None,clFilter=None, timeFilter=None):
-		hasClFilter = clFilter is not None and len(clFilter) != 0
-		hasTimeFilter = timeFilter is not None and len(timeFilter.timeline) != 0
+		hasClFilter = clFilter is not None and not clFilter.isEmpty()
+		hasTimeFilter = timeFilter is not None and not timeFilter.isEmpty()
 
 		for node in self.soup.find_all("part"):
 			mtype = node["ct"]

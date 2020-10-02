@@ -123,12 +123,15 @@ class TimelineFilter:
 		return False
 
 
+	def isEmpty(self):
+		return len(self.timeline) == 0
+
+
+#insert into sorted array
 def insertarr(arr, value, cmpfunc, unique=False):
 	length = len(arr)
 	low = 0
 	high = length
-
-	#insert into sorted array
 
 	while low < high:
 		mid = (low + high) // 2

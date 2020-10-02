@@ -26,6 +26,8 @@ def main(argv):
 
 	aparser.add_argument("-f", "--filter-contact", metavar="NAME", action="append", help="add contact to filter")
 	aparser.add_argument("-g", "--filter-number", metavar="NUM", action="append", help="add number to filter")
+	aparser.add_argument("--filter-contact-expr", metavar="EXPR", action="append", help="add contact expression to filter")
+	aparser.add_argument("--filter-number-expr", metavar="EXPR", action="append", help="add number expression to filter")
 	aparser.add_argument("-t", "--filter-time", metavar=("START", "END"), nargs=2, action="append", help="add time range to filter, START/END can be in seconds since epoch or YYYY-MM-DD HH:MM:SS")
 
 	aparser.add_argument("--replace-num-num", metavar=("SEARCH", "REPLACE"), nargs=2, action="append", help="replace number by number")
@@ -94,6 +96,13 @@ def main(argv):
 		for num in argspace.filter_number:
 			clFilter.addNumber(num)
 
+	if argspace.filter_contact_expr is not None:
+		for expr in argspace.filter_contact_expr:
+			clFilter.addContactExpr(expr)
+	if argspace.filter_number_expr is not None:
+		for expr in argspace.filter_number_expr:
+			clFilter.addNumberExpr(expr)
+
 	if argspace.filter_time is not None:
 		for start, end in argspace.filter_time:
 			timeFilter.addTimeRange(start, end)
@@ -115,13 +124,14 @@ def main(argv):
 		for num, ct in argspace.replace_contact_num:
 			mainParser.replaceContactByNumber(num, ct)
 
-	if any(map(lambda x: x is not None, [argspace.filter_number, argspace.filter_contact, argspace.filter_time])):
+	if any(map(lambda x: x is not None, [argspace.filter_number, argspace.filter_contact, argspace.filter_number_expr, argspace.filter_contact_expr, argspace.filter_time])):
 		if not argspace.remove_filtered and not argspace.keep_filtered:
 			argspace.keep_filtered = True
 
 	if argspace.remove_filtered or argspace.keep_filtered:
 		mainParser.removeByFilter(clFilter, timeFilter, removeFiltered=argspace.remove_filtered, matchesAnyFilter=argspace.match_any, fullMatch=not argspace.partial_match)
 
+	#update contacts after replacing, removing
 	contactList = mainParser.getFullContacts()
 
 	try:
