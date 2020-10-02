@@ -527,8 +527,8 @@ def escapeInvalidXmlCharacters(data):
 
 
 def unescapeEscapedAmpersands(data):
-	regex = re.compile('body=("[^"]*(?:&amp;#)[^"]*"|\'[^\']*(?:&amp;#)[^\']*\')')
-	newdata = ""
+	regex = re.compile(b'body=("[^"]*(?:&amp;#)[^"]*"|\'[^\']*(?:&amp;#)[^\']*\')')
+	newdata = bytes()
 	offset = 0
 
 	for match in re.finditer(regex, data):
