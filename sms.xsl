@@ -15,29 +15,55 @@
 			font-size: 13px;
 		}
 
+		img {
+			max-width: 300px;
+			max-height: 240px;
+		}
+
 		table {
-			font-size: 1em;
-			margin: 0 0 1em;
 			border-collapse: collapse;
 			border-width: 0;
+
 			empty-cells: show;
 		}
 
 		td, th {
 			border: 1px solid #ccc;
-			padding: 6px 12px;
+			padding: 8px 12px;
 			text-align: left;
-			vertical-align: top;
-			background-color: inherit;
+
+			white-space: pre-wrap;
 		}
 
 		th {
-			background-color: #dee8f1;
+			background-color: #86bbf0;
+		}
+
+		tr[data-type='Sent'] {
+			background-color: #b0ffb0;
+		}
+
+		tr[data-type='Draft'] {
+			background-color: #fafabb;
+		}
+
+		.emoji {
+			font-size: 18px;
+			vertical-align: middle;
+		}
+
+		.message {
+			min-width: 300px;
+			width: 500px;
+		}
+
+		.mms-sender {
+			display: none;
 		}
 	</style>
 </head>
 <body>
-	<h2>Messages</h2>
+	<h1>Messages</h1>
 	<table>
 		<tr>
 			<th>Type</th>
@@ -77,7 +103,7 @@
 				<td><xsl:value-of select="@address"/></td>
 				<td><xsl:value-of select="@contact_name"/></td>
 				<td><xsl:value-of select="@readable_date"/></td>
-				<td>
+				<td class="message">
 					<xsl:choose>
 						<xsl:when test="name() = 'sms'">
 							<xsl:value-of select="@body"/>
