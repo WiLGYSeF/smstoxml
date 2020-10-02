@@ -12,12 +12,15 @@
 	<style type="text/css">
 		body {
 			font-family: arial,sans-serif;
-			font-size: 13px;
 		}
 
 		img {
 			max-width: 300px;
 			max-height: 240px;
+		}
+
+		p {
+			font-size: 14px;
 		}
 
 		table {
@@ -29,9 +32,10 @@
 
 		td, th {
 			border: 1px solid #ccc;
-			padding: 8px 12px;
+			font-size: 13px;
 			text-align: left;
 
+			padding: 8px 12px;
 			white-space: pre-wrap;
 		}
 
@@ -64,7 +68,8 @@
 </head>
 <body>
 	<h1>Messages</h1>
-	<table>
+	<p>Texts shown: <span id="textsShown">0</span></p>
+	<table id="entry-table">
 		<tr>
 			<th>Type</th>
 			<th>Number</th>
@@ -131,6 +136,19 @@
 			</tr>
 		</xsl:for-each>
 	</table>
+
+	<script>
+	<![CDATA[
+		"use strict";
++
+		function updateCount(tbl)
+		{
+			document.getElementById("textsShown").innerHTML = tbl.rows.length - 1;
+		}
+
+		updateCount(entryTable);
+	]]>
+	</script>
 </body>
 </html>
 </xsl:template>
