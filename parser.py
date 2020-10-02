@@ -134,11 +134,7 @@ class Parser:
 
 
 	def convertMmsContacts(self, contactList):
-		ctItems = []
-		for num, ctname in contactList.items():
-			ctItems.append( (num, ctname) )
-
-		for num, ctname in ctItems:
+		for num, ctname in list(contactList.items()):
 			numbers, contacts = self.splitMmsContacts(num, ctname)
 			if len(numbers) > 1:
 				for i in range(len(numbers)):
@@ -147,12 +143,9 @@ class Parser:
 
 
 	def splitMmsContacts(self, numbers, contacts):
-		numberlist = []
-		contactlist = []
-
 		if "~" in numbers:
-			numberlist.extend(numbers.split("~"))
-			contactlist.extend(contacts.split(", "))
+			numberlist = numbers.split("~")
+			contactlist = contacts.split(", ")
 
 			while len(numberlist) >= len(contactlist):
 				contactlist.append("(Unknown)")
@@ -168,12 +161,9 @@ class Parser:
 
 
 	def renameUnknownContacts(self, contactList):
-		ctItems = []
 		unknownCount = 1
-		for num, ctname in contactList.items():
-			ctItems.append( (num, ctname) )
 
-		for num, ctname in ctItems:
+		for num, ctname in list(contactList.items()):
 			if ctname == "(Unknown)":
 				contactList[num] = "(Unknown %d)" % unknownCount
 				unknownCount += 1
