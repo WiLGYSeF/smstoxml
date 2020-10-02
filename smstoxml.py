@@ -17,28 +17,28 @@ def main(argv):
 	aparser = argparse.ArgumentParser(description="")
 	agroup = aparser.add_mutually_exclusive_group()
 	agroup.add_argument("-l", "--list", action="store_true", help="list the contacts in the file")
-	agroup.add_argument("--stats", action="store_true", help="display statistics of entries")
-	aparser.add_argument("--yaml", action="store_true", help="output statistics as YAML instead of JSON")
+	agroup.add_argument("-s", "--stats", action="store_true", help="display statistics of entries")
+	aparser.add_argument("-y", "--yaml", action="store_true", help="output statistics as YAML instead of JSON")
 	aparser.add_argument("--no-output", action="store_true", help="do not write output when using --list or --stats, use - as the output file")
 
 	agroup = aparser.add_mutually_exclusive_group()
 	agroup.add_argument("--sort-contact", action="store_true", help="sort list output by contact")
 	agroup.add_argument("--sort-number", action="store_true", help="sort list output by number (default)")
 
+	aparser.add_argument("-d", "--filter-contact-expr", metavar="EXPR", action="append", help="add contact expression to filter")
+	aparser.add_argument("-e", "--filter-number-expr", metavar="EXPR", action="append", help="add number expression to filter")
 	aparser.add_argument("-f", "--filter-contact", metavar="NAME", action="append", help="add contact to filter")
 	aparser.add_argument("-g", "--filter-number", metavar="NUM", action="append", help="add number to filter")
-	aparser.add_argument("--filter-contact-expr", metavar="EXPR", action="append", help="add contact expression to filter")
-	aparser.add_argument("--filter-number-expr", metavar="EXPR", action="append", help="add number expression to filter")
 	aparser.add_argument("-t", "--filter-time", metavar=("START", "END"), nargs=2, action="append", help="add time range to filter, START/END can be in seconds since epoch or YYYY-MM-DD HH:MM:SS")
 
-	aparser.add_argument("--replace-num-num", metavar=("SEARCH", "REPLACE"), nargs=2, action="append", help="replace number by number")
-	aparser.add_argument("--replace-num-contact", metavar=("SEARCH", "REPLACE"), nargs=2, action="append", help="replace number by contact")
-	aparser.add_argument("--replace-contact-contact", metavar=("SEARCH", "REPLACE"), nargs=2, action="append", help="replace contact name by contact")
-	aparser.add_argument("--replace-contact-num", metavar=("SEARCH", "REPLACE"), nargs=2, action="append", help="replace contact name by number")
+	aparser.add_argument("--replace-num-num", "--rnn", metavar=("SEARCH", "REPLACE"), nargs=2, action="append", help="replace number by number")
+	aparser.add_argument("--replace-num-contact", "--rnc", metavar=("SEARCH", "REPLACE"), nargs=2, action="append", help="replace number by contact")
+	aparser.add_argument("--replace-contact-contact", "--rcc", metavar=("SEARCH", "REPLACE"), nargs=2, action="append", help="replace contact name by contact")
+	aparser.add_argument("--replace-contact-num", "--rcn", metavar=("SEARCH", "REPLACE"), nargs=2, action="append", help="replace contact name by number")
 
 	agroup = aparser.add_mutually_exclusive_group()
-	agroup.add_argument("--remove-filtered", action="store_true", help="remove entries that match the given filters")
-	agroup.add_argument("--keep-filtered", action="store_true", help="keep entries that match the given filters")
+	agroup.add_argument("-r", "--remove-filtered", action="store_true", help="remove entries that match the given filters")
+	agroup.add_argument("-k", "--keep-filtered", action="store_true", help="keep entries that match the given filters")
 	aparser.add_argument("--match-any", action="store_true", help="entries will be filtered if either contact/number or time filter matches instead of needing both to match")
 	aparser.add_argument("--partial-match", action="store_true", help="an entry with any numbers/contacts in the filter can match instead of all of them needing to match")
 
@@ -49,9 +49,9 @@ def main(argv):
 
 	aparser.add_argument("--strip", action="store_true", help="strips non-critical attributes from entries, MAY AFFECT RESTORATION")
 
-	aparser.add_argument("--indent", metavar="VALUE", action="store", help="indent entries by VALUE spaces, or 'tab'")
+	aparser.add_argument("-i", "--indent", metavar="VALUE", action="store", help="indent entries by VALUE spaces, or 'tab'")
 
-	aparser.add_argument("--extract-media", metavar="FILE", action="store", help="extract media files to FILE archive")
+	aparser.add_argument("-x", "--extract-media", metavar="FILE", action="store", help="extract media files to FILE archive")
 	aparser.add_argument("--no-write-optimized-images", action="store_true", help="do not write optimized images into the output file")
 	aparser.add_argument("--image-width", metavar="VALUE", action="store", help="set maximum image width")
 	aparser.add_argument("--image-height", metavar="VALUE", action="store", help="set maximum image height")
