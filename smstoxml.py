@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
 
-#requires python3-bs4, python3-pil, python3-lxml, pyyaml
-
 import argparse
 import json
 import sys
@@ -209,6 +207,7 @@ def optimizeAndExtractIfEnabled(mainParser, argspace, clFilter, timeFilter):
 def unicode_print(s):
 	sys.stdout.buffer.write(s.encode("utf-8"))
 	print("")
+
 
 if __name__ == "__main__":
 	main(sys.argv)
