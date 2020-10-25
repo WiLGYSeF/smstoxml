@@ -9,19 +9,23 @@ class Archiver:
 		self.arType = type_
 
 		if self.arType not in ["tar", "tgz", "zip"]:
-			if self.name.endswith(".tgz") or self.name.endswith(".tar.gz"):
+			if self.name.endswith(".tar"):
+				self.arType = "tar"
+			elif self.name.endswith(".tgz") or self.name.endswith(".tar.gz"):
 				self.arType = "tgz"
 			else:
 				self.arType = "zip"
 
-		if self.arType == "tgz":
+		if self.arType == "tar":
+			self.ar = tarfile.open(self.name, "w:")
+		elif self.arType == "tgz":
 			self.ar = tarfile.open(self.name, "w:gz")
-		else:
+		elif self.arType == "zip":
 			self.ar = zipfile.ZipFile(self.name, "w", compression=zipfile.ZIP_DEFLATED)
 
 
 	def addFile(self, name, data):
-		if self.arType == "tgz":
+		if self.arType == "tar" or self.arType == "tgz":
 			tarinfo = tarfile.TarInfo(name=name)
 			tarinfo.size = len(data)
 			self.ar.addfile(tarinfo, io.BytesIO(data))
