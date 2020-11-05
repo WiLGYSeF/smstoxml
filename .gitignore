@@ -1,4 +1,6 @@
 __pycache__/
+htmlcov/
 *.xml
 *-old.txt
+.coverage
 todo.txt
