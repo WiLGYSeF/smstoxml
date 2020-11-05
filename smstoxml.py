@@ -59,28 +59,7 @@ def main(argv):
 
 	argspace = aparser.parse_args()
 
-	with open(argspace.inputs[0], "rb") as f:
-		mainParser = parser.Parser(f.read())
-		if mainParser.smsXML:
-			collection = mainParser.soup.find("smses")
-		else:
-			collection = mainParser.soup.find("calls")
-
-	if len(argspace.inputs) > 1:
-		for i in range(1, len(argspace.inputs)):
-			with open(argspace.inputs[i], "rb") as f:
-				mergeParser = parser.Parser(f.read())
-				if mergeParser.smsXML != mainParser.smsXML:
-					raise Exception("cannot merge mixed file types")
-
-				if mainParser.smsXML:
-					nodes = mergeParser.soup.find_all(["sms", "mms"])
-				else:
-					nodes = mergeParser.soup.find_all("call")
-
-				for n in nodes:
-					collection.append(n.extract())
-
+	mainParser = loadFiles(argspace.inputs)
 
 	contactList = mainParser.getFullContacts()
 	clFilter = ContactListFilter(contactList)
@@ -180,6 +159,34 @@ def main(argv):
 
 	if argspace.no_write_optimized_images:
 		optimizeAndExtractIfEnabled(mainParser, argspace, clFilter, timeFilter)
+
+
+def loadFiles(fnameList):
+	mainParser = None
+
+	with open(fnameList[0], "rb") as f:
+		mainParser = parser.Parser(f.read())
+		if mainParser.smsXML:
+			collection = mainParser.soup.find("smses")
+		else:
+			collection = mainParser.soup.find("calls")
+
+	if len(fnameList) > 1:
+		for i in range(1, len(fnameList)):
+			with open(fnameList[i], "rb") as f:
+				mergeParser = parser.Parser(f.read())
+				if mergeParser.smsXML != mainParser.smsXML:
+					raise Exception("cannot merge mixed file types")
+
+				if mainParser.smsXML:
+					nodes = mergeParser.soup.find_all(["sms", "mms"])
+				else:
+					nodes = mergeParser.soup.find_all("call")
+
+				for n in nodes:
+					collection.append(n.extract())
+
+	return mainParser
 
 
 def optimizeImages(mainParser, argspace, clFilter, timeFilter):
