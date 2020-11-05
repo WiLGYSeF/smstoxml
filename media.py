@@ -38,8 +38,8 @@ def optimizeImage(data, format, maxWidth=None, maxHeight=None, jpgQuality=None, 
 		if changed:
 			img.save(tmpbuf, format="jpeg", optimize=True, quality=jpgQuality)
 	else:
-		img.save(tmpbuf, format=format, optimize=True)
-		changed = True
+		if changed:
+			img.save(tmpbuf, format=format, optimize=True)
 
 	if changed:
 		didShrink = sio.getbuffer().nbytes > tmpbuf.getbuffer().nbytes
