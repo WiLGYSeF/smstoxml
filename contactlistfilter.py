@@ -2,21 +2,15 @@ import re
 
 
 class ContactListFilter:
-	def __init__(self, contactList):
-		self.contactList = contactList
-
-		self.numberSet = set(contactList)
-		self.contactSet = set(map(lambda x: contactList[x], contactList))
-
+	def __init__(self):
 		self.filterNumbers = set()
 		self.filterContacts = set()
 
 		self.filterNumbersRegex = []
 		self.filterContactsRegex = []
 
+
 	def addNumber(self, number):
-		#if number not in self.numberSet:
-		#	raise Exception(number + " not found")
 		self.filterNumbers.add(number)
 
 
@@ -25,8 +19,6 @@ class ContactListFilter:
 
 
 	def addContact(self, contact):
-		#if contact not in self.contactSet:
-		#	raise Exception(contact + " not found")
 		self.filterContacts.add(contact)
 
 

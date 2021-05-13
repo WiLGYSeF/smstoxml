@@ -6,11 +6,8 @@ class TimelineFilter:
 	RANGE_END = 1
 
 
-	def __init__(self, inclusive=True):
+	def __init__(self):
 		self.timeline = []
-		self.inclusive = inclusive
-
-		self.condensed = False
 
 
 	def addTimeRange(self, start, end, dateformat="%Y-%m-%d %H:%M:%S"):
@@ -44,7 +41,7 @@ class TimelineFilter:
 		# 0 for start time, 1 for end time
 		insertarr(self.timeline, ( startTime, TimelineFilter.RANGE_BEGIN ), cmpfunc, unique=True)
 		insertarr(self.timeline, ( endTime, TimelineFilter.RANGE_END ), cmpfunc, unique=True)
-		self.condensed = False
+		self.condense()
 
 
 	def condense(self):
@@ -79,16 +76,10 @@ class TimelineFilter:
 			condensedTimeline.append( ( end, TimelineFilter.RANGE_END ) )
 
 		self.timeline = condensedTimeline
-		self.condensed = True
 
 
 	def invert(self, minStart=0, maxEnd=2 ** 32 - 1):
-		if not self.condensed:
-			self.condense()
-
 		inverted = TimelineFilter()
-		inverted.inclusive = not self.inclusive
-		inverted.condensed = True
 
 		endTime = self.timeline[0][0]
 
@@ -112,15 +103,12 @@ class TimelineFilter:
 		return inverted
 
 
-	def inTimeline(self, time):
-		if not self.condensed:
-			self.condense()
-
+	def inTimeline(self, time, inclusive=True):
 		idx = 0
 		while idx < len(self.timeline) - 1:
 			if self.timeline[idx][0] < time and self.timeline[idx + 1][0] > time:
 				return True
-			if self.inclusive and (self.timeline[idx][0] == time or self.timeline[idx + 1][0] == time):
+			if inclusive and (self.timeline[idx][0] == time or self.timeline[idx + 1][0] == time):
 				return True
 			idx += 2
 		return False

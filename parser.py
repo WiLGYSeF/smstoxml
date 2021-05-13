@@ -389,7 +389,7 @@ class Parser:
 					incr += 1
 			else:
 				mmsparent = node.parent.parent
-				ext = mimetype.guessMimetype(node["ct"])
+				ext = mimetype.guessExtension(node["ct"])
 
 				if ext is not None and len(ext) != 0:
 					ext = "." + ext

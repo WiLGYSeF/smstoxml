@@ -18,5 +18,9 @@ mimetypes_dict = {
 }
 
 
-def guessMimetype(s):
-	return mimetypes_dict.get(s, mimetypes.guess_extension(s))
+def guessExtension(s):
+	if mimetypes_dict.get(s):
+		return mimetypes_dict[s]
+
+	e = mimetypes.guess_extension(s)
+	return None if e is None else e[1:]
