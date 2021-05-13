@@ -1,58 +1,44 @@
+from collections import deque
 import base64
-import bs4
-import io
-import mimetypes
-from PIL import Image
 import re
-import sys
-import tarfile
-import zipfile
+
+import bs4
+
+import archiver
+import media
+import mimetype
+
 
 class Parser:
 	SMS_RECEIVED = 1
 	SMS_SENT = 2
 	SMS_DRAFT = 3
 
-	CONTACT_UNKNOWN = "(Unknown)"
-
 	def __init__(self, data):
-		self.smsXML = True if re.search(r'<smses(?: [^>]*)?>', data) else False
+		#set true if search returns a match object
+		self.smsXML = True if re.search(b'<smses(?: [^>]*)?>', data) else False
 
 		if self.smsXML:
 			data = escapeInvalidXmlCharacters(data)
-			data = escapeBodyNewlines(data)
 
-		self.soup = bs4.BeautifulSoup(data, "xml")
+		self.soup = bs4.BeautifulSoup(data.decode("utf-8"), "xml")
+
+
+	def getFullContacts(self):
+		contactList = self.getContacts()
+		self.convertMmsContacts(contactList)
+		self.renameUnknownContacts(contactList)
+
+		return contactList
+
 
 	def getContacts(self):
 		contactList = {}
-		unknownnumbers = 1
-		unknownnumberssub = 1
 
 		if self.smsXML:
 			for node in self.soup.find_all(["sms", "mms"]):
 				number = node["address"]
 				ctname = node["contact_name"]
-
-				if node.name == "mms" and "~" in number:
-					#if there are multiple numbers, add all of them separately, and later together, to the contact list
-					numbers, contacts = self.splitNumbers(number, ctname)
-
-					for i in range(len(contacts)):
-						num = numbers[i]
-						if len(num) == 0:
-							num = "(UnknownSub%d)" % unknownnumbersub
-							unknownnumberssub += 1
-
-						#will override to latest contact name
-						contactList[num] = contacts[i]
-
-					#using the version with padded '(Unknown)'s breaks keep-filters
-					#number, ctname = self.joinNumbers(numbers, contacts)
-
-				if len(number) == 0:
-					number = "(Unknown%d)" % unknownnumbers
-					unknownnumbers += 1
 
 				#will override to latest contact name
 				contactList[number] = ctname
@@ -60,239 +46,226 @@ class Parser:
 			for call in self.soup.find_all("call"):
 				number = call["number"]
 
-				if len(number) == 0:
-					number = "(Unknown%d)" % unknownnumbers
-					unknownnumbers += 1
-
 				#will override to latest contact name
 				contactList[number] = call["contact_name"]
-
 		return contactList
 
-	def count(self):
-		#ctcount = {}
-		numcount = {}
-		mmscount = {}
-		unknownnumbers = 1
 
-		def incrEntry(d, k, b):
-			if k not in d:
-				d[k] = [0, 0]
-			if b:
-				d[k][0] += 1
+	def count(self):
+		counter = {}
+
+		def incr(s, k, sent):
+			obj = counter
+			if isinstance(s, list):
+				for p in s:
+					if p not in obj:
+						obj[p] = {}
+					obj = obj[p]
 			else:
-				d[k][1] += 1
+				if s not in counter:
+					counter[s] = {}
+				obj = counter[s]
+
+			if k not in obj:
+				obj[k] = {
+					"sent": 0,
+					"received": 0,
+				}
+
+			obj[k]["sent" if sent else "received"] += 1
 
 		if self.smsXML:
+			sSent = 0
+			sRecv = 0
+			mSent = 0
+			mRecv = 0
+
 			for node in self.soup.find_all(["sms", "mms"]):
-				if node.name == "mms":
-					sent = int(node["msg_box"]) == Parser.SMS_SENT
+				sent = int(node["msg_box" if node.name == "mms" else "type"]) == Parser.SMS_SENT
+				numbers, contacts = self.splitMmsContacts(node["address"], node["contact_name"])
+
+				if node.name == "sms":
+					if sent:
+						sSent += 1
+					else:
+						sRecv += 1
 				else:
-					sent = int(node["type"]) == Parser.SMS_SENT
+					if sent:
+						mSent += 1
+					else:
+						mRecv += 1
 
-				#incrEntry(ctcount, node["contact_name"], sent)
+				for i in range(len(numbers)):
+					incr([node.name, "numbers"], numbers[i], sent)
+					incr([node.name, "contacts"], contacts[i], sent)
 
-				number, _ = self.spljoinNumbers(node["address"], node["contact_name"])
-				if len(number) == 0:
-					number = "(Unknown%d)" % unknownnumbers
-					unknownnumbers += 1
-
-				incrEntry(numcount, number, sent)
-
-				if node.name == "mms":
-					incrEntry(mmscount, number, sent)
+			if "sms" in counter:
+				counter["sms"]["total"] = {
+					"sent": sSent,
+					"received": sRecv
+				}
+			if "mms" in counter:
+				counter["mms"]["total"] = {
+					"sent": mSent,
+					"received": mRecv
+				}
 		else:
+			cSent = 0
+			cRecv = 0
+
 			for call in self.soup.find_all("call"):
 				sent = int(call["type"]) == Parser.SMS_SENT
 
-				#incrEntry(ctcount, call["contact_name"], sent)
+				if sent:
+					cSent += 1
+				else:
+					cRecv += 1
 
-				number = call["number"]
-				if len(number) == 0:
-					number = "(Unknown%d)" % unknownnumbers
-					unknownnumbers += 1
+				incr(["call", "numbers"], call["number"], sent)
+				incr(["call", "contacts"], call["contact_name"], sent)
 
-				incrEntry(numcount, number, sent)
+			if "call" in counter:
+				counter["call"]["total"] = {
+					"sent": cSent,
+					"received": cRecv
+				}
 
-		#return (ctcount, numcount, mmscount)
-		return (numcount, mmscount)
+		return counter
 
-	def removeByFilter(self, clfilter, timefilter):
+
+	def convertMmsContacts(self, contactList):
+		for num, ctname in list(contactList.items()):
+			numbers, contacts = self.splitMmsContacts(num, ctname)
+			if len(numbers) > 1:
+				for i in range(len(numbers)):
+					contactList[numbers[i]] = contacts[i]
+				del contactList[num]
+
+
+	def splitMmsContacts(self, numbers, contacts):
+		if "~" in numbers:
+			numberlist = numbers.split("~")
+			contactlist = contacts.split(", ")
+
+			while len(numberlist) > len(contactlist):
+				contactlist.append("(Unknown)")
+		else:
+			numberlist = [numbers]
+			contactlist = [contacts]
+
+		return numberlist, contactlist
+
+
+	def joinMmsContacts(self, numbers, contacts):
+		return "~".join(numbers), ", ".join(contacts)
+
+
+	def renameUnknownContacts(self, contactList):
+		unknownCount = 1
+
+		for num, ctname in list(contactList.items()):
+			if ctname == "(Unknown)":
+				contactList[num] = "(Unknown %d)" % unknownCount
+				unknownCount += 1
+
+
+	def removeByFilter(self, clfilter, timefilter, removeFiltered=True, matchesAnyFilter=False, fullMatch=True):
 		removed = False
-
-		hasClFilter = clfilter is not None and len(clfilter) != 0
-		hasTimeFilter = timefilter is not None and len(timefilter) != 0
 
 		if self.smsXML:
 			for node in self.soup.find_all(["sms", "mms"]):
-				number = node["address"]
-				ctname = node["contact_name"]
 				#time is stored in milliseconds since epoch
 				seconds = int(node["date"]) // 1000
 
-				if hasClFilter and not clfilter.hasNumberOrContact(number, ctname):
-					continue
-				if hasTimeFilter and not timefilter.inTimeline(seconds):
-					continue
+				numbers, contacts = self.splitMmsContacts(node["address"], node["contact_name"])
+				bMapped = list(map(
+					lambda num, ctname: self.inFilters(clfilter, timefilter, num, ctname, seconds, removeFiltered=removeFiltered, matchesAnyFilter=matchesAnyFilter),
+					numbers,
+					contacts
+				))
 
-				node.decompose()
-				removed = True
+				if (fullMatch and all(bMapped)) or (not fullMatch and any(bMapped)):
+					node.decompose()
+					removed = True
 		else:
 			for call in self.soup.find_all("call"):
-				number = call["number"]
+				num = call["number"]
 				ctname = call["contact_name"]
 				#time is stored in milliseconds since epoch
 				seconds = int(call["date"]) // 1000
 
-				if hasClFilter and not clfilter.hasNumberOrContact(number, ctname):
-					continue
-				if hasTimeFilter and not timefilter.inTimeline(seconds):
-					continue
-
-				call.decompose()
-				removed = True
+				if self.inFilters(clfilter, timefilter, num, ctname, seconds, removeFiltered=removeFiltered, matchesAnyFilter=matchesAnyFilter):
+					call.decompose()
+					removed = True
 
 		if removed:
-			self.updateRemove()
+			self.updateCount()
 
-	def replaceNumbers(self, contactList, timefilter):
-		hasTimeFilter = timefilter is not None and len(timefilter) != 0
+
+	def replace(self, search, replace, searchType, replaceType, timefilter=None):
+		hasTimeFilter = timefilter is not None and not timefilter.isEmpty()
+
+		def modifyContactInfo(num, ctname):
+			numbers, contacts = self.splitMmsContacts(num, ctname)
+			for i in range(len(numbers)):
+				if (searchType == "number" and numbers[i] == search) or (searchType == "contact" and contacts[i] == search):
+					if replaceType == "number":
+						numbers[i] = replace
+					elif replaceType == "contact":
+						contacts[i] = replace
+			return self.joinMmsContacts(numbers, contacts)
 
 		if self.smsXML:
 			for node in self.soup.find_all(["sms", "mms"]):
-				#time is stored in milliseconds since epoch
-				seconds = int(node["date"]) // 1000
-
-				if hasTimeFilter and not timefilter.inTimeline(seconds):
-					continue
-
-				#works for both sms and mms
-
-				numbers, contacts = self.splitNumbers(node["address"], node["contact_name"], padUnknowns=False)
-
-				for i in range(len(contacts)):
-					ctname = contacts[i]
-
-					if ctname not in contactList:
+				if hasTimeFilter:
+					#time is stored in milliseconds since epoch
+					seconds = int(node["date"]) // 1000
+					if not timefilter.inTimeline(seconds):
 						continue
 
-					if contactList[ctname] is not None:
-						numbers[i] = contactList[ctname]
-
-				numstr, ctstr = self.joinNumbers(numbers, contacts)
+				numstr, ctstr = modifyContactInfo(node["address"], node["contact_name"])
 				node["address"] = numstr
 				node["contact_name"] = ctstr
 		else:
 			for call in self.soup.find_all("call"):
-				#time is stored in milliseconds since epoch
-				seconds = int(call["date"]) // 1000
-
-				if hasTimeFilter and not timefilter.inTimeline(seconds):
-					continue
-
-				ctname = call["contact_name"]
-				if ctname in contactList and contactList[ctname] is not None:
-					call["number"] = contactList[ctname]
-
-	def normalizeNumbers(self, clfilter, timefilter):
-		ctList = {}
-
-		hasClFilter = clfilter is not None and len(clfilter) != 0
-		hasTimeFilter = timefilter is not None and len(timefilter) != 0
-
-		if self.smsXML:
-			for node in self.soup.find_all(["sms", "mms"]):
-				number = node["address"]
-				ctname = node["contact_name"]
-				#time is stored in milliseconds since epoch
-				seconds = int(node["date"]) // 1000
-
-				if hasClFilter and not clfilter.hasNumberOrContact(number, ctname):
-					continue
-				if hasTimeFilter and not timefilter.inTimeline(seconds):
-					continue
-
-				#works for both sms and mms
-
-				numbers, contacts = self.splitNumbers(node["address"], node["contact_name"])
-
-				for i in range(len(contacts)):
-					number = numbers[i]
-					ctname = contacts[i]
-
-					if ctname == Parser.CONTACT_UNKNOWN:
+				if hasTimeFilter:
+					#time is stored in milliseconds since epoch
+					seconds = int(node["date"]) // 1000
+					if not timefilter.inTimeline(seconds):
 						continue
 
-					if ctname in ctList:
-						if ctList[ctname] is not None and len(ctList[ctname]) <= len(number):
-							if len(ctList[ctname]) == len(number) and ctList[ctname] != number:
-								#ambiguous number, ignore
-								ctList[ctname] = None
-							else:
-								ctList[ctname] = number
-					else:
-						ctList[ctname] = number
-		else:
-			for call in self.soup.find_all("call"):
-				number = call["number"]
-				ctname = call["contact_name"]
-				#time is stored in milliseconds since epoch
-				seconds = int(call["date"]) // 1000
+				numstr, ctstr = modifyContactInfo(call["number"], call["contact_name"])
+				call["number"] = numstr
+				call["contact_name"] = ctstr
 
-				if hasClFilter and not clfilter.hasNumberOrContact(number, ctname):
-					continue
-				if hasTimeFilter and not timefilter.inTimeline(seconds):
-					continue
 
-				if ctname == Parser.CONTACT_UNKNOWN:
-					continue
+	def replaceNumberByNumber(self, searchNum, replaceNum, timefilter=None):
+		self.replace(searchNum, replaceNum, "number", "number", timefilter)
 
-				if ctname in ctList:
-					if ctList[ctname] is not None and len(ctList[ctname]) <= len(number):
-						if len(ctList[ctname]) == len(number) and ctList[ctname] != number:
-							#ambiguous number, ignore
-							ctList[ctname] = None
-						else:
-							ctList[ctname] = number
-				else:
-					ctList[ctname] = number
 
-		self.replaceNumbers(ctList, timefilter)
+	def replaceNumberByContact(self, searchContact, replaceNum, timefilter=None):
+		self.replace(searchContact, replaceNum, "contact", "number", timefilter)
 
-	def splitNumbers(self, numberstr, contactstr, padUnknowns=True):
-		numbers = numberstr.split("~")
-		contacts = contactstr.split(", ")
 
-		if padUnknowns:
-			diff = len(numbers) - len(contacts)
-			for i in range(diff):
-				contacts.append(Parser.CONTACT_UNKNOWN)
+	def replaceContactByContact(self, searchContact, replaceContact, timefilter=None):
+		self.replace(searchContact, replaceContact, "contact", "contact", timefilter)
 
-		return ( numbers, contacts )
 
-	def joinNumbers(self, numbers, contacts):
-		return ( "~".join(numbers), ", ".join(contacts))
+	def replaceContactByNumber(self, searchNum, replaceContact, timefilter=None):
+		self.replace(searchNum, replaceContact, "number", "contact", timefilter)
 
-	def spljoinNumbers(self, numbers, contacts, padUnknowns=True):
-		n, c = self.splitNumbers(numbers, contacts, padUnknowns)
-		return self.joinNumbers(n, c)
 
-	def removeNoDuration(self, clfilter, timefilter):
+	def removeNoDuration(self, clfilter, timefilter, removeFiltered=True, matchesAnyFilter=False):
 		if self.smsXML:
 			raise Exception("cannot remove no-duration calls from sms file")
 
 		removed = False
 
-		hasClFilter = clfilter is not None and len(clfilter) != 0
-		hasTimeFilter = timefilter is not None and len(timefilter) != 0
-
 		for call in self.soup.find_all("call"):
 			#time is stored in milliseconds since epoch
 			seconds = int(call["date"]) // 1000
 
-			if hasClFilter and clfilter.hasNumberOrContact(call["number"], call["contact_name"]):
-				continue
-			if hasTimeFilter and timefilter.inTimeline(seconds):
+			if self.inFilters(clfilter, timefilter, call["number"], call["contact_name"], seconds, removeFiltered=removeFiltered, matchesAnyFilter=matchesAnyFilter):
 				continue
 
 			if call["duration"] == "0":
@@ -300,27 +273,28 @@ class Parser:
 				removed = True
 
 		if removed:
-			self.updateRemove()
+			self.updateCount()
 
-	def updateRemove(self):
+
+	def updateCount(self):
 		if self.smsXML:
 			nodes = self.soup.find("smses").contents
 		else:
 			nodes = self.soup.find("calls").contents
 
-		i = 0
 		nlen = len(nodes)
+		idx = 0
 
-		while i < nlen:
-			node = nodes[i]
-			if i < nlen - 1 and isinstance(node, bs4.element.NavigableString) and node == "\n":
+		while idx < nlen:
+			node = nodes[idx]
+			if idx < nlen - 1 and isinstance(node, bs4.element.NavigableString) and node == "\n":
 				#find extra newlines and delete them
-				j = i + 1
-				while j < nlen and isinstance(nodes[j], bs4.element.NavigableString) and nodes[j] == "\n":
+				nlx = idx + 1
+				while nlx < nlen and isinstance(nodes[nlx], bs4.element.NavigableString) and nodes[nlx] == "\n":
 					#NavigableString has no decompose()
-					nodes[j].extract()
+					nodes[nlx].extract()
 					nlen -= 1
-			i += 1
+			idx += 1
 
 		if self.smsXML:
 			smses = self.soup.find("smses")
@@ -329,218 +303,167 @@ class Parser:
 			calls = self.soup.find("calls")
 			calls["count"] = len(self.soup.find_all("call"))
 
-	def stripAttrs(self, aggressive=False):
+
+	def stripAttrs(self):
+		def delattrib(obj, keep):
+			attrs = list(filter(lambda x: x not in keep, obj.attrs))
+			for a in attrs:
+				del obj.attrs[a]
+
 		if self.smsXML:
+			KEEPATTR = set(["address", "body", "contact_name", "date", "date_sent", "read", "readable_date", "type"])
 			for node in self.soup.find_all("sms"):
-				KEEPATTR = set(["address", "body", "contact_name", "date", "date_sent", "read", "readable_date", "type"])
+				delattrib(node, KEEPATTR)
 
-				attrs = node.attrs.copy()
-				for attr in node.attrs:
-					if attr not in KEEPATTR:
-						del(attrs[attr])
-				node.attrs = attrs
-
+			KEEPATTR = set(["chset", "cid", "cl", "ct", "data", "name", "seq", "text"])
 			for node in self.soup.find_all("part"):
-				KEEPATTR = set(["chset", "cid", "cl", "ct", "data", "name", "seq", "text"])
-
-				attrs = node.attrs.copy()
-				for attr in node.attrs:
-					if attr not in KEEPATTR:
-						del(attrs[attr])
-				node.attrs = attrs
+				delattrib(node, KEEPATTR)
 
 				#strip out crlf from mms part formatting
 				if "text" in node.attrs and "seq" in node.attrs and node.attrs["seq"] == "-1":
 					node.attrs["text"] = node.attrs["text"].replace("&#13;&#10;", "")
 		else:
+			KEEPATTR = set(["contact_name", "date", "duration", "number", "readable_date", "type"])
 			for node in self.soup.find_all("call"):
-				KEEPATTR = set(["contact_name", "date", "duration", "number", "readable_date", "type"])
+				delattrib(node, KEEPATTR)
 
-				attrs = node.attrs.copy()
-				for attr in node.attrs:
-					if attr not in KEEPATTR:
-						del(attrs[attr])
-				node.attrs = attrs
-
-	def extractMedia(self, arname, skiptype, clfilter, timefilter):
-		if not self.smsXML:
-			raise Exception("cannot extract media from call file")
-
-		mimetypes_dict = {
-			"audio/mpeg": "mp2",
-			"image/bmp": "bmp",
-			"image/gif": "gif",
-			"image/jpeg": "jpg",
-			"image/png": "png",
-			"image/svg+xml": "svg",
-			"image/tiff": "tiff",
-			"text/html": "txt",
-			"video/mpeg": "mpg",
-			"video/quicktime": "mov",
-			"video/webm": "webm",
-			"video/x-msvideo": "avi",
-			"video/x-sgi-movie": "movie",
-		}
-
-		if arname.endswith(".tgz") or arname.endswith(".tar.gz"):
-			ar = tarfile.open(arname, "w:gz")
-			atype = "tgz"
-		else:
-			ar = zipfile.ZipFile(arname, "w")
-			atype = "zip"
-		usednames = set()
-
-		hasClFilter = clfilter is not None and len(clfilter) != 0
-		hasTimeFilter = timefilter is not None and len(timefilter) != 0
-
-		for node in self.soup.find_all("part"):
-			mtype = node["ct"]
-			if mtype == "application/smil":
-				continue
-
-			#node["data"] doesnt exist anymore?
-			if "data" not in node.attrs:
-				continue
-
-			mmsparent = node.parent.parent
-			if hasClFilter and not clfilter.hasNumberOrContact(mmsparent["address"], mmsparent["contact_name"]):
-				continue
-
-			#time is stored in milliseconds since epoch
-			seconds = int(mmsparent["date"]) // 1000
-			if hasTimeFilter and not timefilter.inTimeline(seconds):
-				continue
-
-			if mtype in skiptype:
-				continue
-
-			if "name" in node:
-				name = node["name"]
-				spl = name.split(".")
-				fname = ".".join(spl[0:-1])
-				ext = spl[-1]
-
-				inc = 1
-				while name in usednames:
-					name = fname + "_" + str(inc) + "." + ext
-					inc += 1
-			else:
-				ext = mimetypes_dict.get(mtype, mimetypes.guess_extension(mtype))
-				name = mmsparent["date"] + "-" + mmsparent["contact_name"] + "." + ext
-
-				inc = 1
-				while name in usednames:
-					name = mmsparent["date"] + "-" + mmsparent["contact_name"] + "_" + str(inc) + "." + ext
-					inc += 1
-
-			data = base64.b64decode(node.attrs["data"])
-			sio = io.BytesIO(data)
-
-			if atype == "tgz":
-				tarinfo = tarfile.TarInfo(name=str(name))
-				tarinfo.size = len(data)
-				ar.addfile(tarinfo, sio)
-			else:
-				ar.writestr(name, sio.getvalue())
-			usednames.add(name)
-
-		ar.close()
-
-	def optimizeImages(self, clfilter, timefilter, maxWidth, maxHeight, jpgQuality, shrinkOnly):
-		if not self.smsXML:
-			raise Exception("cannot optimize images from call file")
-
-		mimetypes_dict = {
-			"image/bmp": "bmp",
-			"image/gif": "gif",
-			"image/jpeg": "jpeg",
-			"image/png": "png",
-			"image/svg+xml": "svg",
-			"image/tiff": "tiff"
-		}
-
-		hasClFilter = clfilter is not None and len(clfilter) != 0
-		hasTimeFilter = timefilter is not None and len(timefilter) != 0
-
-		for node in self.soup.find_all("part"):
-			mtype = node["ct"]
-			if mtype == "application/smil":
-				continue
-
-			#node["data"] doesnt exist anymore?
-			if "data" not in node.attrs:
-				continue
-
-			mmsparent = node.parent.parent
-			if hasClFilter and not clfilter.hasNumberOrContact(mmsparent["address"], mmsparent["contact_name"]):
-					continue
-
-			#time is stored in milliseconds since epoch
-			seconds = int(mmsparent["date"]) // 1000
-			if hasTimeFilter and not timefilter.inTimeline(seconds):
-				continue
-
-			if mtype in mimetypes_dict:
-				changed = False
-
-				data = base64.b64decode(node.attrs["data"])
-				sio = io.BytesIO(data)
-				img = Image.open(sio)
-
-				if maxWidth != -1 or maxHeight != -1:
-					if maxWidth == -1:
-						maxWidth = img.width
-					if maxHeight == -1:
-						maxHeight = img.height
-
-					if maxWidth < img.width or maxHeight < img.height:
-						img.thumbnail( (maxWidth, maxHeight), Image.ANTIALIAS)
-						changed = True
-
-				tmpbuf = io.BytesIO()
-				if mtype == "image/jpeg":
-					if jpgQuality == -1:
-						jpgQuality = "keep"
-					else:
-						changed = True
-
-					if changed:
-						img.save(tmpbuf, format=mimetypes_dict[mtype], optimize=True, quality=jpgQuality)
-				else:
-					img.save(tmpbuf, format=mimetypes_dict[mtype], optimize=True)
-					changed = True
-
-				if changed:
-					if not shrinkOnly or sio.getbuffer().nbytes > tmpbuf.getbuffer().nbytes:
-						newdata = base64.b64encode(tmpbuf.getvalue()).decode("ascii")
-						node.attrs["data"] = newdata
-					else:
-						mmselement = node.parent.parent
-						print("img: " + mmselement.attrs["address"] + ' "' + mmselement.attrs["contact_name"].replace('"', '\\"') + '" ' + mmselement.attrs["readable_date"] + ": image did not shrink!", file=sys.stderr)
 
 	def removeComments(self, root=None):
 		if root is None:
 			root = self.soup
 
-		for node in root:
+		nodeque = deque([root])
+		while len(nodeque) > 0:
+			node = nodeque.popleft()
 			if isinstance(node, bs4.element.Comment):
 				#Comment has no decompose()
 				node.extract()
 			else:
 				try:
-					if len(list(node.children)) > 0:
-						self.removeComments(node)
+					for c in node.children:
+						nodeque.append(c)
 				except:
 					pass
 
-	def hasStylesheet(self):
-		for child in self.soup.children:
-			if isinstance(child, bs4.element.XMLProcessingInstruction):
-				if str(child).startswith("xml-stylesheet"):
-					return True
-		return False
 
-	def prettify(self, indent=2, tabs=False):
+	def inFilters(self, clFilter, timeFilter, num, ctname, seconds, removeFiltered=True, matchesAnyFilter=False):
+		hasClFilter = clFilter is not None and not clFilter.isEmpty()
+		hasTimeFilter = timeFilter is not None and not timeFilter.isEmpty()
+		b = False
+
+		if matchesAnyFilter:
+			b = (hasClFilter and clFilter.hasNumberOrContact(num, ctname)) or (hasTimeFilter and timeFilter.inTimeline(seconds))
+		else:
+			b = False
+			if hasClFilter:
+				b = clFilter.hasNumberOrContact(num, ctname)
+			if hasTimeFilter:
+				if not hasClFilter:
+					b = True
+				b = b and timeFilter.inTimeline(seconds)
+
+		return b if removeFiltered else not b
+
+
+	def extractMedia(self, arname, artype=None, excludeMimetypes=None, clfilter=None, timefilter=None):
+		if not self.smsXML:
+			raise Exception("cannot extract media from call file")
+
+		archive = archiver.Archiver(arname, type_=artype)
+		usedNames = set()
+
+		for node in self.genMmsMedia(excludeMimetypes, clFilter=clfilter, timeFilter=timefilter):
+			if "name" in node:
+				name = node["name"]
+				if "." in name:
+					spl = name.split(".")
+					fname = ".".join(spl[1:])
+					ext = "." + spl[0]
+				else:
+					fname = ""
+					ext = ""
+
+				incr = 1
+				while name in usedNames:
+					name = "%s_%d%s" % (fname, incr, ext)
+					incr += 1
+			else:
+				mmsparent = node.parent.parent
+				ext = mimetype.guessExtension(node["ct"])
+
+				if ext is not None and len(ext) != 0:
+					ext = "." + ext
+				name = "%s-%s%s" % (mmsparent["date"], mmsparent["contact_name"], ext)
+
+				incr = 1
+				while name in usedNames:
+					name = "%s-%s_%d%s" % (mmsparent["date"], mmsparent["contact_name"], incr, ext)
+					incr += 1
+
+			data = base64.b64decode(node.attrs["data"])
+			try:
+				archive.addFile(name, data)
+				usedNames.add(name)
+			except Exception as e:
+				traceback.print_exc()
+
+		archive.close()
+
+
+	def optimizeImages(self, clfilter=None, timefilter=None, maxWidth=None, maxHeight=None, jpgQuality=None, onlyShrink=False):
+		if not self.smsXML:
+			raise Exception("cannot optimize images from call file")
+
+		for node in self.genMmsMedia(None, clFilter=clfilter, timeFilter=timefilter):
+			if node["ct"] not in media.imageMimetypes:
+				continue
+
+			try:
+				optimized = media.optimizeImage(
+					base64.b64decode(node.attrs["data"]),
+					media.imageMimetypes[node["ct"]],
+					maxWidth=maxWidth,
+					maxHeight=maxHeight,
+					jpgQuality=jpgQuality,
+					onlyShrink=onlyShrink
+				)
+
+				if optimized:
+					node.attrs["data"] = base64.b64encode(optimized).decode("ascii")
+				if optimized is None:
+					mmse = node.parent.parent
+					print('img: %s "%s" %s: image did not shrink' % (mmse.attrs["address"], mmse.attrs["contact_name"].replace('"', '\\"'), mmse.attrs["readable_date"]), file=sys.stderr)
+			except:
+				pass
+
+
+	def genMmsMedia(self, excludeMimetypes=None,clFilter=None, timeFilter=None):
+		hasClFilter = clFilter is not None and not clFilter.isEmpty()
+		hasTimeFilter = timeFilter is not None and not timeFilter.isEmpty()
+
+		for node in self.soup.find_all("part"):
+			mtype = node["ct"]
+			if mtype == "application/smil":
+				continue
+			if "data" not in node.attrs:
+				continue
+
+			mmsparent = node.parent.parent
+			numbers, contacts = self.splitMmsContacts(mmsparent["address"], mmsparent["contact_name"])
+			if hasClFilter and not any(map(lambda num, ctname: clFilter.hasNumberOrContact(num, ctname), numbers, contacts)):
+				continue
+			#time is stored in milliseconds since epoch
+			seconds = int(mmsparent["date"]) // 1000
+			if hasTimeFilter and not timefilter.inTimeline(seconds):
+				continue
+
+			if excludeMimetypes is not None and mtype in excludeMimetypes:
+				continue
+
+			yield node
+
+
+	def prettify(self, indent=2):
 		lines = self.soup.prettify().split("\n")
 
 		if not self.hasStylesheet():
@@ -549,30 +472,27 @@ class Parser:
 			else:
 				lines.insert(1, '<?xml-stylesheet type="text/xsl" href="calls.xsl"?>')
 
-		if tabs:
-			length = len(lines)
-			c = 0
+		if indent != 1:
+			for i in range(len(lines)):
+				line = lines[i]
+				c = 0
 
-			while c < length:
-				line = lines[c]
-				linelen = len(line)
+				while c < len(line):
+					if line[c] != " ":
+						break
+					c += 1
+				lines[i] = ("\t" * c if indent == "\t" else " " * indent * c) + line[c:]
 
-				i = 0
-				while i < linelen and line[i] == " ":
-					i += 1
+		return "\n".join(lines)
 
-				if i != 0:
-					lines[c] = ("\t" * i) + line[i:]
-				c += 1
 
-			output = "\n".join(lines)
-		else:
-			if indent != 1:
-				wspace = re.compile(r'^(\s*)', re.MULTILINE)
-				output = wspace.sub("\\1" * indent, "\n".join(lines))
-			else:
-				output = "\n".join(lines)
-		return output
+	def hasStylesheet(self):
+		for child in self.soup.children:
+			if isinstance(child, bs4.element.XMLProcessingInstruction):
+				if str(child).startswith("xml-stylesheet"):
+					return True
+		return False
+
 
 	def __str__(self):
 		lines = str(self.soup).split("\n")
@@ -584,9 +504,10 @@ class Parser:
 				lines.insert(1, '<?xml-stylesheet type="text/xsl" href="calls.xsl"?>')
 		return "\n".join(lines)
 
+
 def escapeInvalidXmlCharacters(data):
-	regex = re.compile(r'&#(\d+|x[\dA-Fa-f]+);')
-	newdata = ""
+	regex = re.compile(b'&#(\d+|x[\dA-Fa-f]+);')
+	newdata = bytearray()
 	offset = 0
 
 	for match in re.finditer(regex, data):
@@ -604,9 +525,10 @@ def escapeInvalidXmlCharacters(data):
 
 	return newdata
 
-def unescapeInvalidXmlCharacters(data):
-	regex = re.compile('body=("[^"]*(?:&amp;#)[^"]*"|\'[^\']*(?:&amp;#)[^\']*\')')
-	newdata = ""
+
+def unescapeEscapedAmpersands(data):
+	regex = re.compile(b'body=("[^"]*(?:&amp;#)[^"]*"|\'[^\']*(?:&amp;#)[^\']*\')')
+	newdata = bytes()
 	offset = 0
 
 	for match in re.finditer(regex, data):
@@ -615,6 +537,7 @@ def unescapeInvalidXmlCharacters(data):
 	newdata += data[offset:]
 
 	return newdata
+
 
 def escapeBodyNewlines(data):
 	regex = re.compile('body=("[^"]*\n[^"]*"|\'[^\']*\n[^\']*\')')
@@ -627,6 +550,7 @@ def escapeBodyNewlines(data):
 	newdata += data[offset:]
 
 	return newdata
+
 
 def isValidXML(c):
 	return c == 0x09 or c == 0x0a or c == 0x0d or (c >= 0x20 and c <= 0xd7ff) or (c >= 0xe000 and c <= 0xfffd) or (c >= 0x10000 and c <= 0x10ffff)

@@ -1,552 +1,220 @@
-#requires python3-bs4, python3-pil, python3-lxml
+#!/usr/bin/env python3
 
-import filters
-import parser
-from parser import Parser
-
-import re
+import argparse
+import json
 import sys
-import time
+
+import yaml
+
+from contactlistfilter import ContactListFilter
+from timelinefilter import TimelineFilter
+import parser
+
 
 def main(argv):
-	infname = None
-	outfname = None
+	aparser = argparse.ArgumentParser(description="")
+	agroup = aparser.add_mutually_exclusive_group()
+	agroup.add_argument("-l", "--list", action="store_true", help="list the contacts in the file")
+	agroup.add_argument("-s", "--stats", action="store_true", help="display statistics of entries")
+	aparser.add_argument("-y", "--yaml", action="store_true", help="output statistics as YAML instead of JSON")
+	aparser.add_argument("--no-output", action="store_true", help="do not write output when using --list or --stats, use - as the output file")
 
-	#filters
-	contactFilterList = set()
-	numberFilterList = set()
+	aparser.add_argument("--sort-contact", action="store_true", help="sort list output by contact instead of number")
 
-	timeFilter = filters.TimelineFilter()
+	aparser.add_argument("-d", "--filter-contact-expr", metavar="EXPR", action="append", help="add contact expression to filter")
+	aparser.add_argument("-e", "--filter-number-expr", metavar="EXPR", action="append", help="add number expression to filter")
+	aparser.add_argument("-f", "--filter-contact", metavar="NAME", action="append", help="add contact to filter")
+	aparser.add_argument("-g", "--filter-number", metavar="NUM", action="append", help="add number to filter")
+	aparser.add_argument("-t", "--filter-time", metavar=("START", "END"), nargs=2, action="append", help="add time range to filter, START/END can be in seconds since epoch or YYYY-MM-DD HH:MM:SS")
 
-	replaceNumbers = {}
+	aparser.add_argument("--replace-num-num", "--rnn", metavar=("SEARCH", "REPLACE"), nargs=2, action="append", help="replace number by number")
+	aparser.add_argument("--replace-num-contact", "--rnc", metavar=("SEARCH", "REPLACE"), nargs=2, action="append", help="replace number by contact")
+	aparser.add_argument("--replace-contact-contact", "--rcc", metavar=("SEARCH", "REPLACE"), nargs=2, action="append", help="replace contact name by contact")
+	aparser.add_argument("--replace-contact-num", "--rcn", metavar=("SEARCH", "REPLACE"), nargs=2, action="append", help="replace contact name by number")
 
-	#options
-	listContacts = False
-	listStats = False
-	sortContacts = False
-	sortNumbers = False
-	normalize = False
-	removeFiltered = False
-	keepFiltered = False
-	removeNoDuration = False
-	revert = False
-	doConvert = True
-	stripAttr = False
-	extractfname = None
-	removeComments = False
-	indentation = 1
+	agroup = aparser.add_mutually_exclusive_group()
+	agroup.add_argument("-r", "--remove-filtered", action="store_true", help="remove entries that match the given filters")
+	agroup.add_argument("-k", "--keep-filtered", action="store_true", help="keep entries that match the given filters")
+	aparser.add_argument("--match-any", action="store_true", help="entries will be filtered if either contact/number or time filter matches instead of needing both to match")
+	aparser.add_argument("--partial-match", action="store_true", help="an entry with any numbers/contacts in the filter can match instead of all of them needing to match")
 
-	fileList = []
-	mergeFiles = False
-	mergeStdout = False
+	aparser.add_argument("--remove-no-duration", action="store_true", help="remove call entries with no call duration")
+	aparser.add_argument("--remove-comments", action="store_true", help="remove comments from output")
 
-	#image optimization options
-	optimizeImages = False
-	imageWidth = -1
-	imageHeight = -1
-	jpgQuality = -1
-	shrinkOnly = False
+	aparser.add_argument("--revert-escape", action="store_true", help="revert escaped invalid XML")
 
-	if len(argv) > 1:
-		i = 1
-		parse = True
+	aparser.add_argument("--strip", action="store_true", help="strips non-critical attributes from entries, MAY AFFECT RESTORATION")
 
-		while i < len(argv):
-			arg = argv[i]
+	aparser.add_argument("-i", "--indent", metavar="VALUE", action="store", help="indent entries by VALUE spaces, or 'tab'")
 
-			if arg == "--":
-				parse = False
-				i += 1
-				continue
+	aparser.add_argument("-x", "--extract-media", metavar="FILE", action="store", help="extract media files to FILE archive")
+	aparser.add_argument("--no-write-optimized-images", action="store_true", help="do not write optimized images into the output file")
+	aparser.add_argument("--image-width", metavar="VALUE", action="store", help="set maximum image width")
+	aparser.add_argument("--image-height", metavar="VALUE", action="store", help="set maximum image height")
+	aparser.add_argument("--jpg-quality", metavar="VALUE", action="store", help="set jpg image quality")
+	aparser.add_argument("--shrink-only", action="store_true", help="only change media if the newer data is smaller")
 
-			if not parse:
-				fileList.append(arg)
+	aparser.add_argument("output", metavar="OUTPUT", action="store")
+	aparser.add_argument("inputs", metavar="INPUT", action="store", nargs="+")
 
-				if infname is None:
-					infname = arg
-				else:
-					if outfname is None:
-						outfname = arg
+	argspace = aparser.parse_args()
 
-				i += 1
-				continue
+	mainParser = loadFiles(argspace.inputs)
 
-			if arg == "-h" or arg == "--help":
-				printHelp()
-				exit(0)
-			elif arg == "--statistics":
-				listStats = True
-			elif arg == "-l" or arg == "--list":
-				listContacts = True
-			elif arg == "--sort-contacts":
-				sortContacts = True
-			elif arg == "--sort-numbers":
-				sortNumbers = True
-			elif arg == "-f" or arg == "--filter-contact":
-				if i == len(argv) - 1:
-					printHelp()
-					exit(1)
+	contactList = mainParser.getFullContacts()
+	clFilter = ContactListFilter()
+	timeFilter = TimelineFilter()
 
-				contactFilterList.add(argv[i + 1])
-				i += 1
-			elif arg == "-g" or arg == "--filter-number":
-				if i == len(argv) - 1:
-					printHelp()
-					exit(1)
-
-				numberFilterList.add(argv[i + 1])
-				i += 1
-			elif arg == "-t" or arg == "--filter-time":
-				if i == len(argv) - 2:
-					printHelp()
-					exit(1)
-
-				try:
-					timeFilter.addTimeRange(argv[i + 1], argv[i + 2])
-				except Exception as e:
-					print("Error: " + str(e), file=sys.stderr)
-					exit(1)
-
-				i += 2
-			elif arg == "--replace-number":
-				if i == len(argv) - 2:
-					printHelp()
-					exit(1)
-
-				replaceNumbers[argv[i + 1]] = argv[i + 2]
-				i += 2
-			elif arg == "--normalize":
-				normalize = True
-			elif arg == "--remove-filtered":
-				removeFiltered = True
-			elif arg == "--remove-no-duration":
-				removeNoDuration = True
-			elif arg == "--remove-comments":
-				removeComments = True
-			elif arg == "--keep-filtered":
-				keepFiltered = True
-			elif arg == "-r" or arg == "--revert":
-				revert = True
-			elif arg == "--no-convert":
-				doConvert = False
-			elif arg == "-s" or arg == "--strip":
-				stripAttr = True
-			elif arg == "--indent":
-				if i == len(argv) - 1:
-					printHelp()
-					exit(1)
-
-				if argv[i + 1].lower() == "tab" or argv[i + 1].lower() == "tabs" or argv[i + 1].lower() == "t":
-					indentation = "tab"
-				else:
-					try:
-						indentation = int(argv[i + 1])
-					except:
-						print("Error: invalid indentation", file=sys.stderr)
-						exit(1)
-				i += 1
-			elif arg == "--merge":
-				mergeFiles = True
-			elif arg == "--merge-out":
-				mergeFiles = True
-				mergeStdout = True
-			elif arg == "-e" or arg == "--extract-media":
-				if i == len(argv) - 1:
-					printHelp()
-					exit(1)
-
-				extractfname = argv[i + 1]
-				i += 1
-			elif arg == "--image-width":
-				if i == len(argv) - 1:
-					printHelp()
-					exit(1)
-
-				try:
-					imageWidth = int(argv[i + 1])
-				except:
-					print("Error: invalid image width", file=sys.stderr)
-					exit(1)
-
-				optimizeImages = True
-				i += 1
-			elif arg == "--image-height":
-				if i == len(argv) - 1:
-					printHelp()
-					exit(1)
-
-				try:
-					imageHeight = int(argv[i + 1])
-				except:
-					print("Error: invalid image height", file=sys.stderr)
-					exit(1)
-
-				optimizeImages = True
-				i += 1
-			elif arg == "--jpg-quality":
-				if i == len(argv) - 1:
-					printHelp()
-					exit(1)
-
-				try:
-					jpgQuality = int(argv[i + 1])
-				except:
-					print("Error: invalid jpg quality")
-					exit(1)
-
-				optimizeImages = True
-				i += 1
-			elif arg == "--shrink-only":
-				shrinkOnly = True
-			elif arg[0] == "-":
-				if infname is None:
-					infname = "-"
-				else:
-					print("Error: unknown argument " + arg, file=sys.stderr)
-					exit(1)
-			else:
-				fileList.append(arg)
-
-				if infname is None:
-					infname = arg
-				else:
-					if outfname is None:
-						outfname = arg
-					else:
-						if not mergeFiles:
-							print("Error: too many filenames", file=sys.stderr)
-							exit(1)
-			i += 1
-
-	if removeFiltered and keepFiltered:
-		print("Error: both --remove-filtered and --keep-filtered specified", file=sys.stderr)
-		print("")
-		printHelp()
-		exit(1)
-
-	if sortContacts and sortNumbers:
-		print("Error: both --sort-contacts and --sort-numbers specified", file=sys.stderr)
-		print("")
-		printHelp()
-		exit(1)
-
-	parserObj = None
-
-	if mergeFiles:
-		try:
-			parserList = []
-
-			if len(fileList) == 0:
-				print("Error: not enough merge filenames", file=sys.stderr)
-				exit(1)
-
-			if mergeStdout:
-				outfname = None
-			else:
-				outfname = fileList.pop()
-
-			if len(fileList) == 0:
-				print("Error: not enough merge filenames", file=sys.stderr)
-				exit(1)
-
-			for fname in fileList:
-				infile = open(fname, "r", encoding="utf8")
-
-				if parserObj is None:
-					parserObj = Parser(infile.read())
-				else:
-					prsr = Parser(infile.read())
-					if parserObj.smsXML != prsr.smsXML:
-						print("Error: xml file types do not match", file=sys.stderr)
-						exit(1)
-
-					parserList.append(prsr)
-
-				infile.close()
-
-			if parserObj.smsXML:
-				parent = parserObj.soup.find("smses")
-			else:
-				parent = parserObj.soup.find("calls")
-
-			for prsr in parserList:
-				if parserObj.smsXML:
-					nodes = prsr.soup.find_all(["sms", "mms"])
-				else:
-					nodes = prsr.soup.find_all("call")
-
-				for e in nodes:
-					parent.append(e.extract())
-		except Exception as e:
-			print("Error: could not read file: " + infname + ". " + str(e), file=sys.stderr)
-			exit(1)
-	else:
-		try:
-			if infname is None or infname == "-":
-				infile = sys.stdin
-			else:
-				infile = open(infname, "r", encoding="utf8")
-
-			data = infile.read()
-			parserObj = Parser(data)
-
-			if infile != sys.stdin:
-				infile.close()
-		except Exception as e:
-			print("Error: could not read file: " + infname + ". " + str(e), file=sys.stderr)
-			exit(1)
-
-	contactList = parserObj.getContacts()
-
-	clFilter = filters.ContactListFilter(contactList)
-
-	for num in numberFilterList:
-		try:
-			clFilter.addNumber(num)
-		except Exception as e:
-			print(e, file=sys.stderr)
-
-	for ct in contactFilterList:
-		try:
+	if argspace.filter_contact is not None:
+		for ct in argspace.filter_contact:
 			clFilter.addContact(ct)
-		except Exception as e:
-			print(e, file=sys.stderr)
+	if argspace.filter_number is not None:
+		for num in argspace.filter_number:
+			clFilter.addNumber(num)
 
+	if argspace.filter_contact_expr is not None:
+		for expr in argspace.filter_contact_expr:
+			clFilter.addContactExpr(expr)
+	if argspace.filter_number_expr is not None:
+		for expr in argspace.filter_number_expr:
+			clFilter.addNumberExpr(expr)
+
+	if argspace.filter_time is not None:
+		for start, end in argspace.filter_time:
+			timeFilter.addTimeRange(start, end)
 	timeFilter.condense()
 
-	filterActions = 0
+	if argspace.remove_no_duration and not mainParser.smsXML:
+		mainParser.removeNoDuration(clFilter, timeFilter)
 
-	if len(clFilter) != 0 or len(timeFilter) != 0:
-		for b in [normalize, removeNoDuration, len(replaceNumbers) != 0, removeFiltered, keepFiltered, listStats, listContacts, optimizeImages, extractfname is not None]:
-			if b:
-				filterActions += 1
+	if argspace.replace_num_num is not None:
+		for n1, n2 in argspace.replace_num_num:
+			mainParser.replaceNumberByNumber(n1, n2)
+	if argspace.replace_num_contact is not None:
+		for ct, num in argspace.replace_num_contact:
+			mainParser.replaceNumberByContact(ct, num)
+	if argspace.replace_contact_contact is not None:
+		for ct1, ct2 in argspace.replace_contact_contact:
+			mainParser.replaceContactByContact(ct1, ct2)
+	if argspace.replace_contact_num is not None:
+		for num, ct in argspace.replace_contact_num:
+			mainParser.replaceContactByNumber(num, ct)
 
-		if filterActions == 0:
-			print("Warn: filters were defined, but not used", file=sys.stderr)
+	if any(map(lambda x: x is not None, [argspace.filter_number, argspace.filter_contact, argspace.filter_number_expr, argspace.filter_contact_expr, argspace.filter_time])):
+		if not argspace.remove_filtered and not argspace.keep_filtered:
+			argspace.keep_filtered = True
 
-	if normalize:
-		parserObj.normalizeNumbers(clFilter, timeFilter)
+	if argspace.remove_filtered or argspace.keep_filtered:
+		mainParser.removeByFilter(clFilter, timeFilter, removeFiltered=argspace.remove_filtered, matchesAnyFilter=argspace.match_any, fullMatch=not argspace.partial_match)
 
-		#update contact list
-		contactList = parserObj.getContacts()
+	#update contacts after replacing, removing
+	contactList = mainParser.getFullContacts()
 
-	if removeNoDuration:
-		try:
-			parserObj.removeNoDuration(clFilter, timeFilter)
-		except Exception as e:
-			print("Error: " + str(e), file=sys.stderr)
-
-	if len(replaceNumbers) != 0:
-		parserObj.replaceNumbers(replaceNumbers, timeFilter)
-
-		#update contact list
-		contactList = parserObj.getContacts()
-
-	if (listStats or listContacts) and filterActions == 1 and not removeFiltered and not keepFiltered:
-		keepFiltered = True
-
-	if len(clFilter) != 0 or len(timeFilter) != 0:
-		if removeFiltered:
-			parserObj.removeByFilter(clFilter, timeFilter)
-		elif keepFiltered:
-			#get the inverse of the filters set
-			invertedClFilter = clFilter.invert()
-			invertedTimeFilter = timeFilter.invert()
-
-			invertedClFilter.matchUnknownNumbers = True
-
-			parserObj.removeByFilter(invertedClFilter, invertedTimeFilter)
-
-		#update contact list
-		contactList = parserObj.getContacts()
-
-	if listStats:
-		numcount, mmscount = parserObj.count()
-		totalCount = 0
-
-		for num in numcount:
-			totalCount += numcount[num][0]
-			totalCount += numcount[num][1]
-
-		print(
-			"%s:\n"
-			"Total Count: %d\n"
-			"" % (infname, totalCount)
-		)
-
-		if parserObj.smsXML:
-			print("Number, Contact, Sent, Received")
+	try:
+		if argspace.indent == "tab":
+			argspace.indent = "\t"
 		else:
-			print("Number, Contact, Outgoing, Incoming")
+			argspace.indent = int(argspace.indent)
+	except:
+		argspace.indent = 2
 
-		if sortNumbers:
-			numbers = list(numcount.keys())
-			numbers.sort()
+	if not argspace.no_write_optimized_images:
+		optimizeAndExtractIfEnabled(mainParser, argspace, clFilter, timeFilter)
 
-			for num in numbers:
-				print('%s, "%s", %d, %d' % (num, contactList[num], numcount[num][0], numcount[num][1]))
-		elif sortContacts:
-			sortedContact = sorted(contactList.items(), key=lambda x: x[1])
-			for item in sortedContact:
-				if item[0] not in numcount:
-					continue
-				print('%s, "%s", %d, %d' % (item[0], item[1], numcount[item[0]][0], numcount[item[0]][1]))
+	if argspace.stats:
+		counter = mainParser.count()
+		if argspace.yaml:
+			unicode_print(yaml.dump(counter))
 		else:
-			for num in numcount:
-				print('%s, "%s", %d, %d' % (num, contactList[num], numcount[num][0], numcount[num][1]))
+			unicode_print(json.dumps(counter, indent=argspace.indent))
 
-		totalMmsCount = 0
-		for mms in mmscount:
-			totalMmsCount += mmscount[mms][0]
-			totalMmsCount += mmscount[mms][1]
+	if argspace.list:
+		if argspace.sort_contact:
+			items = sorted(contactList.items())
+		else:
+			items = sorted(contactList.items(), key=lambda x: x[1])
 
-		if totalMmsCount > 0:
-			print(
-				"\n"
-				"MMS Total Count: %d\n"
-				"\n"
-				"Number, Contact, Sent, Received" % (totalMmsCount)
-			)
-
-			if sortNumbers:
-				numbers = list(mmscount.keys())
-				numbers.sort()
-
-				for mms in numbers:
-					print('%s, "%s", %d' % (mms, contactList[mms], mmscount[mms][1]))
-			elif sortContacts:
-				sortedContact = sorted(contactList.items(), key=lambda x: x[1])
-				for item in sortedContact:
-					if item[0] not in mmscount:
-						continue
-					print('%s, "%s", %d, %d' % (item[0], item[1], mmscount[item[0]][0], mmscount[item[0]][1]))
+		for num, ctname in items:
+			if argspace.sort_contact:
+				unicode_print("%s: %s" % (ctname, num))
 			else:
-				for mms in mmscount:
-					print('%s, "%s", %d, %d' % (mms, contactList[mms], mmscount[mms][0], mmscount[mms][1]))
+				unicode_print("%s: %s" % (num, ctname))
 
-		print("")
-		exit(0)
+	if argspace.remove_comments:
+		mainParser.removeComments()
 
-	if listContacts:
-		contacts = []
+	if argspace.strip:
+		mainParser.stripAttrs()
 
-		if sortNumbers:
-			numbers = list(contactList.keys())
-			numbers.sort()
+	if not argspace.no_output:
+		outputBuf = mainParser.prettify(indent=argspace.indent).encode("ascii", errors="xmlcharrefreplace")
+		if argspace.revert_escape:
+			outputBuf = parser.unescapeEscapedAmpersands(outputBuf)
 
-			for num in numbers:
-				contacts.append('%s, "%s"' % (num, contactList[num]))
-		elif sortContacts:
-			sortedContact = sorted(contactList.items(), key=lambda x: x[1])
-			for item in sortedContact:
-				contacts.append('%s, "%s"' % (item[0], item[1]))
+		if argspace.output != "-":
+			with open(argspace.output, "wb") as f:
+				f.write(outputBuf)
 		else:
-			for num in contactList:
-				contacts.append('%s, "%s"' % (num, contactList[num]))
+			print(outputBuf.decode("ascii"))
 
-		if len(contacts) != 0:
-			sys.stdout.buffer.write("\n".join(contacts).encode("utf-8"))
-			print("")
+	if argspace.no_write_optimized_images:
+		optimizeAndExtractIfEnabled(mainParser, argspace, clFilter, timeFilter)
 
-		exit(0)
 
-	if optimizeImages:
-		try:
-			parserObj.optimizeImages(clFilter, timeFilter, imageWidth, imageHeight, jpgQuality, shrinkOnly)
-		except Exception as e:
-			print("Error: " + str(e), file=sys.stderr)
-	else:
-		if shrinkOnly:
-			if parserObj.smsXML:
-				print("Warn: --shrink-only was used, but no optimization options were set", file=sys.stderr)
-			else:
-				print("Warn: --shrink-only was used, but file is a call file", file=sys.stderr)
+def loadFiles(fnameList):
+	mainParser = None
 
-	if extractfname is not None:
-		try:
-			parserObj.extractMedia(extractfname, set(), clFilter, timeFilter)
-		except Exception as e:
-			print("Error: " + str(e), file=sys.stderr)
-		exit(0)
-
-	if stripAttr:
-		parserObj.stripAttrs()
-
-	if removeComments:
-		parserObj.removeComments()
-
-	usetabs = indentation == "tab"
-
-	output = parserObj.prettify(indent=indentation, tabs=usetabs)
-
-	if revert or not doConvert:
-		if parserObj.smsXML:
-			output = parser.unescapeInvalidXmlCharacters(output)
+	with open(fnameList[0], "rb") as f:
+		mainParser = parser.Parser(f.read())
+		if mainParser.smsXML:
+			collection = mainParser.soup.find("smses")
 		else:
-			if revert:
-				print("Warn: --revert was used, but file is a call file", file=sys.stderr)
-			if not doConvert:
-				print("Warn: --no-convert was used, but file is a call file", file=sys.stderr)
+			collection = mainParser.soup.find("calls")
 
-	if outfname is not None:
-		try:
-			outfile = open(outfname, "w", encoding="utf8")
-			outfile.write(output)
-			outfile.close()
-		except Exception as e:
-			print("Error: could not write file: " + outfname + ". " + str(e), file=sys.stderr)
-			exit(1)
-	else:
-		sys.stdout.buffer.write(output.encode("utf-8"))
-		print("")
+	if len(fnameList) > 1:
+		for i in range(1, len(fnameList)):
+			with open(fnameList[i], "rb") as f:
+				mergeParser = parser.Parser(f.read())
+				if mergeParser.smsXML != mainParser.smsXML:
+					raise Exception("cannot merge mixed file types")
 
-def printHelp():
-	print(
-		"SMSBackupXML to valid XML converter\n"
-		"Usage: smstoxml.py [input] [output] options...\n"
-		"\n"
-		"  -h, --help                          shows this help menu\n"
-		"  --statistics                        display statistics of sms/calls and exit\n"
-		"  -l, --list                          list the contacts in the file and exit\n"
-		"  --sort-contacts                     sort list output by contact\n"
-		"  --sort-numbers                      sort list output by number (default)\n"
-		"\n"
-		"  -f, --filter-contact [name]         use contact as filter for other options\n"
-		"  -g, --filter-number [number]        use number as filter for other options\n"
-		"  -t, --filter-time [time] [time]     use time range as filter for other options\n"
-		"                                        - times can be in seconds since epoch,\n"
-		"                                          or YYYY-MM-DD HH:MM:SS\n"
-		"\n"
-		"  --replace-number [contact] [num]    replace contact with new number\n"
-		"                                        - will only change time filtered\n"
-		"                                          numbers\n"
-		"  --normalize                         attempt to normalize numbers to the\n"
-		"                                        longest version, only changes filtered\n"
-		"                                        numbers\n"
-		"\n"
-		"  --remove-filtered                   remove sms/calls in the filter\n"
-		"  --keep-filtered                     keep only sms/calls in the filter\n"
-		"  --remove-no-duration                remove zero duration calls for call.xml\n"
-		"                                        - filtered numbers will not be removed\n"
-		"  --remove-comments                   remove comments from the output xml file\n"
-		"\n"
-		"  -r, --revert                        convert valid XML back to SMSBackupXML\n"
-		"  --no-convert                        do not convert XML, default is convert\n"
-		"\n"
-		"  -s, --strip                         strip unnecessary attributes from nodes\n"
-		"                                        MAY MAKE FILE UNRESTORABLE!\n"
-		"  --indent [value]                    number of spaces for indentation, or 'tab'\n"
-		"\n"
-		"  --merge                             merge all files together, in order, and\n"
-		"                                        write it to the last filename given\n"
-		"  --merge-out                         output the merged file to stdout\n"
-		"\n"
-		"  -e, --extract-media [file]          extract media to zip file and exit\n"
-		"  --image-width [value]               set maximum image width\n"
-		"  --image-height [value]              set maximum image height\n"
-		"  --jpg-quality [value]               set jpg image quality\n"
-		"  --shrink-only                       only change media if the size is smaller\n"
-	)
+				if mainParser.smsXML:
+					nodes = mergeParser.soup.find_all(["sms", "mms"])
+				else:
+					nodes = mergeParser.soup.find_all("call")
+
+				for n in nodes:
+					collection.append(n.extract())
+
+	return mainParser
+
+
+def optimizeImages(mainParser, argspace, clFilter, timeFilter):
+	width = argspace.image_width
+	height = argspace.image_height
+	quality = argspace.jpg_quality
+
+	if width is not None:
+		width = int(width)
+	if height is not None:
+		height = int(height)
+	if quality is not None:
+		quality = int(quality)
+
+	mainParser.optimizeImages(clfilter=clFilter, timefilter=timeFilter, maxWidth=width, maxHeight=height, jpgQuality=quality, onlyShrink=argspace.shrink_only)
+
+
+def optimizeAndExtractIfEnabled(mainParser, argspace, clFilter, timeFilter):
+	if any(map(lambda x: x is not None, [argspace.image_width, argspace.image_height, argspace.jpg_quality])):
+		optimizeImages(mainParser, argspace, clFilter, timeFilter)
+	if argspace.extract_media is not None:
+		mainParser.extractMedia(argspace.extract_media, clfilter=clFilter, timefilter=timeFilter)
+
+
+def unicode_print(s):
+	sys.stdout.buffer.write(s.encode("utf-8"))
+	print("")
+
 
 if __name__ == "__main__":
 	main(sys.argv)
